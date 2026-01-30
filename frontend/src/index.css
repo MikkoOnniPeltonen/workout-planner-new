@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+@theme {
+    --font-sans: 'Inter', system-ui, sans-serif;
+
+    --color-background: #09090b;
+    /* Zinc 950 */
+    --color-foreground: #fafafa;
+    /* Zinc 50 */
+
+    --color-primary: #22c55e;
+    /* Green 500 */
+    --color-primary-foreground: #09090b;
+
+    --color-secondary: #27272a;
+    /* Zinc 800 */
+    --color-secondary-foreground: #fafafa;
+
+    --color-muted: #27272a;
+    /* Zinc 800 */
+    --color-muted-foreground: #a1a1aa;
+    /* Zinc 400 */
+
+    --color-accent: #27272a;
+    /* Zinc 800 */
+    --color-accent-foreground: #fafafa;
+
+    --color-destructive: #ef4444;
+    /* Red 500 */
+    --color-destructive-foreground: #fafafa;
+
+    --color-border: #27272a;
+    /* Zinc 800 */
+    --color-input: #27272a;
+    /* Zinc 800 */
+    --color-ring: #22c55e;
+    /* Green 500 */
+
+    --radius-lg: 0.5rem;
+    --radius-md: calc(0.5rem - 2px);
+    --radius-sm: calc(0.5rem - 4px);
+
+    --animate-accordion-down: accordion-down 0.2s ease-out;
+    --animate-accordion-up: accordion-up 0.2s ease-out;
+
+    @keyframes accordion-down {
+        from {
+            height: 0
+        }
+
+        to {
+            height: var(--radix-accordion-content-height)
+        }
+    }
+
+    @keyframes accordion-up {
+        from {
+            height: var(--radix-accordion-content-height)
+        }
+
+        to {
+            height: 0
+        }
+    }
+}
+
+/* Base styles for dark mode */
+:root {
+    color-scheme: dark;
+}
+
+body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+@layer utilities {
+    .step {
+        counter-increment: step;
+    }
+
+    .step:before {
+        @apply absolute w-9 h-9 bg-muted rounded-full font-mono font-medium text-center text-base inline-flex items-center justify-center -indent-px border-4 border-background;
+        @apply ml-[-50px] mt-[-4px];
+        content: counter(step);
+    }
+}
