@@ -1,52 +1,33 @@
-
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import { MuscleGroup } from '../models/MuscleGroup.model.ts';
+import { connectDatabase, logConnectionError } from '../config/database.ts';
 import { Exercise } from '../models/Exercise.model.ts';
+import { MuscleGroup } from '../models/MuscleGroup.model.ts';
+import { User } from '../models/User.model.ts';
 import { Workout } from '../models/Workout.model.ts';
+import { WorkoutSession } from '../models/WorkoutSession.model.ts';
 
-dotenv.config();
-
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/workout-planner';
-
-async function checkData() {
-    try {
-        await mongoose.connect(MONGODB_URI);
-        console.log('Connected to MongoDB');
-
-        // 1. Check Muscle Groups
-        const muscleGroups = await MuscleGroup.find({});
-        console.log(`\nFound ${muscleGroups.length} Muscle Groups:`);
-        muscleGroups.forEach(mg => console.log(` - ${mg.name} (${mg._id})`));
-
-        // 2. Check Exercises
-        const exercises = await Exercise.find({}).limit(5).populate('belongsTo');
-        console.log(`\nFound ${await Exercise.countDocuments()} Exercises. Sample of 5:`);
-        exercises.forEach(ex => {
-            console.log(` - ${ex.name}: belongsTo =`, JSON.stringify(ex.belongsTo));
-        });
-
-        // 3. Check Workouts
-        const workouts = await Workout.find({}).limit(5).populate({
-            path: 'exercises',
-            populate: { path: 'belongsTo' } // Deep populate
-        });
-        console.log(`\nFound ${await Workout.countDocuments()} Workouts. Sample:`);
-        workouts.forEach(w => {
-            console.log(`\nWorkout: ${w.name}`);
-            console.log(`Exercises: ${w.exercises.length}`);
-            w.exercises.forEach((ex: any) => {
-                const groups = ex.belongsTo ? (Array.isArray(ex.belongsTo) ? ex.belongsTo.map((g: any) => g.name).join(', ') : 'Not Array') : 'Null';
-                console.log(`   - ${ex.name} (Groups: ${groups})`);
-            });
-        });
-
-    } catch (error) {
-        console.error('Error checking data:', error);
-    } finally {
-        await mongoose.disconnect();
-        console.log('\nDisconnected');
-    }
+try {
+  await connectDatabase();
+} catch (error) {
+  logConnectionError(error);
+  process.exit(1);
 }
 
-checkData();
+try {
+  const muscleGroups = await MuscleGroup.find().sort({ name: 1 });
+  console.log(`\nFound ${muscleGroups.length} muscle groups:`);
+  for (const group of muscleGroups) {
+    const exerciseCount = await Exercise.countDocuments({ belongsTo: group._id });
+    console.log(` - ${group.name}: ${exerciseCount} exercises`);
+  }
+
+  console.log(`\nExercises: ${await Exercise.countDocuments()}`);
+  console.log(`Users: ${await User.countDocuments()}`);
+  console.log(`Workouts: ${await Workout.countDocuments()}`);
+  console.log(`Logged sessions: ${await WorkoutSession.countDocuments()}`);
+} catch (error) {
+  console.error('Error checking data:', error);
+  process.exitCode = 1;
+} finally {
+  await mongoose.disconnect();
+}

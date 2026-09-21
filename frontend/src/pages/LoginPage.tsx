@@ -1,124 +1,82 @@
-import { type FormEvent, useContext, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '../components/ui/card';
-import { AuthContext } from '../context/auth.context';
-import authService from '../services/auth.service';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation } from '@tanstack/react-query';
+import { type LoginInput, loginSchema } from '@workout-planner/shared';
+import { useForm } from 'react-hook-form';
+import { Link } from 'react-router-dom';
+import { AuthCard } from '@/components/auth/AuthCard';
+import { Button } from '@/components/ui/button';
+import { FormError, FormField } from '@/components/ui/form-field';
+import { Input } from '@/components/ui/input';
+import { useAuth } from '@/context/auth.context';
+import { getErrorMessage } from '@/lib/api';
+import authService from '@/services/auth.service';
 
 function LoginPage() {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
+  const { logIn } = useAuth();
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '' },
   });
-  const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
-  const { storeToken, authenticateUser } = useContext(AuthContext);
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      const response = await authService.login(formData);
-      storeToken(response.data.authToken);
-      authenticateUser();
-      navigate('/'); // Redirect to home or user dashboard
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Login failed. Check your credentials.';
-      setError(errorMessage);
-      console.error(error);
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  // On success the auth guard redirects to the page the user originally wanted.
+  const login = useMutation({
+    mutationFn: (input: LoginInput) => authService.login(input),
+    onSuccess: logIn,
+  });
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-2xl bg-gray-900 border-gray-800 text-white">
-        <CardHeader className="space-y-4">
-          <div className="text-center">
-            <CardTitle className="text-3xl font-bold tracking-tight">Welcome back</CardTitle>
-            <CardDescription className="text-gray-400 mt-2">
-              Enter your email to sign in to your account
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium leading-none text-gray-200">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                type="email"
-                placeholder="name@example.com"
-                className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label
-                  htmlFor="password"
-                  className="text-sm font-medium leading-none text-gray-200"
-                >
-                  Password
-                </label>
-              </div>
+    <AuthCard
+      title="Welcome back"
+      description="Enter your email to sign in to your account"
+      footer={
+        <>
+          Don't have an account?{' '}
+          <Link
+            to="/signup"
+            className="font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            Sign up
+          </Link>
+        </>
+      }
+    >
+      <form
+        noValidate
+        className="space-y-4"
+        onSubmit={handleSubmit((input) => login.mutate(input))}
+      >
+        <FormField label="Email" htmlFor="email" error={errors.email?.message}>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="name@example.com"
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? 'email-error' : undefined}
+            {...register('email')}
+          />
+        </FormField>
+        <FormField label="Password" htmlFor="password" error={errors.password?.message}>
+          <Input
+            id="password"
+            type="password"
+            autoComplete="current-password"
+            aria-invalid={Boolean(errors.password)}
+            aria-describedby={errors.password ? 'password-error' : undefined}
+            {...register('password')}
+          />
+        </FormField>
 
-              <input
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                type="password"
-                className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                required
-              />
-            </div>
+        {login.isError && <FormError message={getErrorMessage(login.error)} />}
 
-            {error && (
-              <div className="p-3 rounded-md bg-red-900/30 border border-red-900 text-red-300 text-sm font-medium">
-                {error}
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              className="w-full bg-white text-black hover:bg-gray-200 font-semibold mt-4 h-11"
-            >
-              Sign in
-            </Button>
-          </form>
-        </CardContent>
-        <CardFooter className="flex justify-center border-t border-gray-800 pt-6">
-          <p className="text-sm text-gray-400">
-            Don't have an account?{' '}
-            <Link
-              to="/signup"
-              className="font-medium text-white hover:underline underline-offset-4"
-            >
-              Sign up
-            </Link>
-          </p>
-        </CardFooter>
-      </Card>
-    </div>
+        <Button type="submit" size="lg" className="w-full" disabled={login.isPending}>
+          {login.isPending ? 'Signing in…' : 'Sign in'}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }
 

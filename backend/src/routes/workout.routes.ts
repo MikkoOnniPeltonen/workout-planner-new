@@ -4,10 +4,12 @@ import { isAuthenticated } from '../middleware/jwt.middleware.ts';
 
 const router = express.Router();
 
-router.get('/', isAuthenticated, workoutController.getAllWorkouts);
+router.use(isAuthenticated);
+
+router.get('/', workoutController.getAllWorkouts);
 router.get('/:id', workoutController.getWorkoutById);
-router.post('/', isAuthenticated, workoutController.createWorkout);
-router.put('/:id', isAuthenticated, workoutController.updateWorkout);
-router.delete('/:id', isAuthenticated, workoutController.deleteWorkout);
+router.post('/', workoutController.createWorkout);
+router.put('/:id', workoutController.updateWorkout);
+router.delete('/:id', workoutController.deleteWorkout);
 
 export default router;

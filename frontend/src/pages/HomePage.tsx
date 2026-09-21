@@ -1,79 +1,81 @@
 import { Link } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardFooter } from '../components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/context/auth.context';
+
+const stories = [
+  {
+    image: '/person-running.webp',
+    alt: 'person running',
+    title: 'How to go hard',
+    subtitle: 'The Strength inside you',
+  },
+  {
+    image: '/person-relaxing.webp',
+    alt: 'person relaxing',
+    title: 'How to keep a balance',
+    subtitle: 'The other side of you',
+    note: 'Remembering how to see beauty in fatigue',
+  },
+  {
+    image: '/future-self.webp',
+    alt: 'future self',
+    title: 'Your way of doing greatness',
+    subtitle: 'Get to know yourself to the last drop of sweat',
+  },
+];
 
 function HomePage() {
+  const { isLoggedIn } = useAuth();
+  const lastIndex = stories.length - 1;
+
   return (
-    <div className="w-full min-h-screen bg-gray-950 p-4 md:p-8 space-y-8 animate-in fade-in duration-500">
-      <article className="max-w-4xl mx-auto space-y-8">
-        <Link to="/dashboard" className="block group">
-          <Card className="relative w-full h-[60vh] overflow-hidden border-none">
-            <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-10" />
-            <img
-              src="/person-running.png"
-              alt="person running"
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-            />
-            <CardContent className="relative h-full z-20 flex flex-col justify-end p-8">
-              <div className="flex flex-col gap-2 mb-2">
-                <h2 className="text-4xl font-bold text-white mb-1 drop-shadow-md">
-                  How to go hard
-                </h2>
-                <h3 className="text-gray-200 text-xl font-medium drop-shadow-sm">
-                  The Strength inside you
-                </h3>
+    <div className="mx-auto max-w-4xl space-y-8 pb-8">
+      {stories.map((story, index) => (
+        <article
+          key={story.title}
+          className="group relative h-[60vh] min-h-80 overflow-hidden rounded-xl"
+        >
+          <img
+            src={story.image}
+            alt={story.alt}
+            loading={index === 0 ? 'eager' : 'lazy'}
+            decoding="async"
+            className="absolute inset-0 size-full object-cover transition-transform duration-700 ease-out group-hover:scale-105 motion-reduce:transition-none"
+          />
+          <div className="absolute inset-0 bg-linear-to-t from-black via-black/40 to-transparent" />
+          <div className="relative flex h-full flex-col justify-end gap-2 p-8">
+            <h2 className="text-3xl font-bold text-white drop-shadow-md sm:text-4xl">
+              {story.title}
+            </h2>
+            <p className="text-xl font-medium text-gray-200 drop-shadow-sm">{story.subtitle}</p>
+            {story.note && <p className="text-sm text-gray-300">{story.note}</p>}
+
+            {index === lastIndex && (
+              <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+                {isLoggedIn ? (
+                  <Button asChild size="lg" className="rounded-full px-8 text-base">
+                    <Link to="/dashboard">Go to your workouts</Link>
+                  </Button>
+                ) : (
+                  <>
+                    <Button asChild size="lg" className="rounded-full px-8 text-base">
+                      <Link to="/signup">Start your journey</Link>
+                    </Button>
+                    <Button
+                      asChild
+                      size="lg"
+                      variant="outline"
+                      className="rounded-full bg-black/40 px-8 text-base"
+                    >
+                      <Link to="/exercises">Browse exercises</Link>
+                    </Button>
+                  </>
+                )}
               </div>
-            </CardContent>
-          </Card>
-        </Link>
-
-        <Card className="relative w-full h-[60vh] overflow-hidden group border-none">
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-10" />
-          <img
-            src="/person-relaxing.webp"
-            alt="person relaxing"
-            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-          />
-          <CardContent className="relative h-full z-20 flex flex-col justify-end p-8">
-            <h2 className="text-4xl font-bold text-white mb-2 drop-shadow-md">
-              How to keep a balance
-            </h2>
-            <h3 className="text-purple-300 font-semibold text-xl drop-shadow-sm mb-2">
-              The other side of you
-            </h3>
-            <h6 className="text-gray-300 text-sm">Remembering how to see beauty in fatigue</h6>
-          </CardContent>
-        </Card>
-      </article>
-
-      <article className="max-w-4xl mx-auto space-y-6">
-        <Card className="relative w-full h-[60vh] overflow-hidden group border-none">
-          <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-transparent z-10" />
-          <img
-            src="/future-self.webp"
-            alt="future self"
-            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
-          />
-          <CardContent className="relative h-full z-20 flex flex-col justify-end p-8">
-            <h2 className="text-4xl font-bold text-white mb-2 drop-shadow-md">
-              Your way of doing greatness
-            </h2>
-            <h3 className="text-gray-200 text-xl mb-6 font-medium drop-shadow-sm">
-              Get to know yourself to the last drop of sweat
-            </h3>
-          </CardContent>
-          <CardFooter className="relative z-30 flex justify-center pb-12">
-            <Link to="/exercises">
-              <Button
-                size="lg"
-                className="bg-white text-black hover:bg-gray-200 font-bold px-10 py-6 text-xl rounded-full shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-1"
-              >
-                Start your journey
-              </Button>
-            </Link>
-          </CardFooter>
-        </Card>
-      </article>
+            )}
+          </div>
+        </article>
+      ))}
     </div>
   );
 }

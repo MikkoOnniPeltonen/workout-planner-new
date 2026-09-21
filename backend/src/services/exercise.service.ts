@@ -1,34 +1,36 @@
 import { Exercise } from '../models/Exercise.model.ts';
-import type { ExerciseType } from '../models/Exercise.model.ts';
-
 import { MuscleGroup } from '../models/MuscleGroup.model.ts';
+import { HttpError } from '../utils/http-error.ts';
+
+const caseInsensitive = { locale: 'en', strength: 2 };
 
 class ExerciseService {
-    async getAllExercises(muscleGroups?: string) {
-        let query = {};
+  async assertExercisesExist(exerciseIds: string[]) {
+    const uniqueIds = [...new Set(exerciseIds)];
+    const found = await Exercise.countDocuments({ _id: { $in: uniqueIds } });
+    if (found !== uniqueIds.length) {
+      throw new HttpError(400, 'One or more exercises do not exist.');
+    }
+  }
 
-        if (muscleGroups) {
-            const groupNames = muscleGroups.split(',').map(name => name.trim());
-            const groups = await MuscleGroup.find({ name: { $in: groupNames } });
-            const groupIds = groups.map(g => g._id);
-            query = { belongsTo: { $in: groupIds } };
-        }
-
-        // Populate the belongsTo field to get MuscleGroup details
-        const exercises = await Exercise.find(query).populate('belongsTo');
-        return exercises;
+  async getAllExercises(muscleGroupNames: string[] = []) {
+    if (muscleGroupNames.length === 0) {
+      return Exercise.find().sort({ name: 1 }).populate('belongsTo');
     }
 
-    async getExerciseById(id: string) {
-        const exercise = await Exercise.findById(id).populate('belongsTo');
-        return exercise;
-    }
+    const groups = await MuscleGroup.find({ name: { $in: muscleGroupNames } }).collation(
+      caseInsensitive,
+    );
+    const groupIds = groups.map((group) => group._id);
 
-    // Placeholder for future use, though not explicit in legacy requirement
-    async createExercise(exerciseData: Partial<ExerciseType>) {
-        const newExercise = await Exercise.create(exerciseData);
-        return newExercise;
-    }
+    return Exercise.find({ belongsTo: { $in: groupIds } })
+      .sort({ name: 1 })
+      .populate('belongsTo');
+  }
+
+  async getExerciseById(id: string) {
+    return Exercise.findById(id).populate('belongsTo');
+  }
 }
 
 export const exerciseService = new ExerciseService();

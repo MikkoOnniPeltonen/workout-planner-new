@@ -1,297 +1,513 @@
-import { useState, useCallback, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { type Exercise, WORKOUT_MAX_EXERCISES, workoutInputSchema } from '@workout-planner/shared';
+import { AnimatePresence, motion } from 'framer-motion';
+import { Check, Plus, Shuffle, X } from 'lucide-react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
-
+import { toast } from 'sonner';
+import { ErrorState, PageLoader } from '@/components/feedback';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { FormError, FormField } from '@/components/ui/form-field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import exercisesService from '@/services/exercises.service';
-import workoutsService from '@/services/workouts.service';
+import { ExercisePicker } from '@/components/workouts/ExercisePicker';
+import {
+  useCreateWorkout,
+  useExercises,
+  useMuscleGroups,
+  useSessionHistory,
+  useSessionStats,
+} from '@/hooks/queries';
+import { getErrorMessage } from '@/lib/api';
+import { formatDaysAgo, formatExerciseName } from '@/lib/format';
+import {
+  equipmentOptions,
+  filterByEquipment,
+  generatePlan,
+  leastRecentlyTrained,
+  type PlannedExercise,
+  type PlanStep,
+  planSteps,
+  type Selections,
+  swapExercise,
+  withAvailableGroups,
+} from '@/lib/plan';
 import { cn } from '@/lib/utils';
 
-// Schema for the final step (workout name)
-const workoutSchema = z.object({
-    name: z.string().min(3, 'Workout name must be at least 3 characters'),
-});
+const DAY_MS = 24 * 60 * 60 * 1000;
+const RECENT_DAYS = 7;
 
-const steps = [
-    { id: 1, title: 'Primary Focus', limit: 3, options: ['Legs', 'Back'], type: 'radio' },
-    { id: 2, title: 'Secondary Focus', limit: 2, options: ['Chest', 'Upper back', 'Shoulders', 'Arms'], type: 'checkbox' },
-    { id: 3, title: 'Finisher', limit: 1, options: ['Core'], type: 'button' },
-    { id: 4, title: 'Review & Save', limit: 0, options: [], type: 'form' },
-];
+const nameSchema = workoutInputSchema.pick({ name: true });
+
+const emptySelections: Selections = Object.fromEntries(planSteps.map((step) => [step.id, []]));
+
+interface PlanState {
+  /** The inputs this plan was generated from, so it is only rebuilt when they change. */
+  selections: Selections;
+  equipment: string[] | null;
+  items: PlannedExercise[];
+}
 
 export default function WorkoutWizard() {
-    const [currentStep, setCurrentStep] = useState(1);
-    const [selections, setSelections] = useState<string[]>([]);
-    const navigate = useNavigate();
-    const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const exercisesQuery = useExercises();
+  const muscleGroupsQuery = useMuscleGroups();
+  // Training history makes the wizard adaptive; without it the wizard still works.
+  const statsQuery = useSessionStats();
+  const historyQuery = useSessionHistory();
+  const createWorkout = useCreateWorkout();
 
-    // Form for final step
-    const { register, handleSubmit, formState: { errors, isSubmitting } } = useForm<{ name: string }>({
-        resolver: zodResolver(workoutSchema),
-    });
+  const [stepIndex, setStepIndex] = useState(0);
+  const [selections, setSelections] = useState<Selections>(emptySelections);
+  /** Equipment available today; null means everything. */
+  const [equipment, setEquipment] = useState<string[] | null>(null);
+  const [plan, setPlan] = useState<PlanState | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const advanceTimer = useRef<number | undefined>(undefined);
 
-    const [generatedExercises, setGeneratedExercises] = useState<any[]>([]);
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm({ resolver: zodResolver(nameSchema), defaultValues: { name: '' } });
 
-    // Fetch exercises based on selections (only fetch when at step 4 or moving to it)
-    const { data: exercisesData, isLoading: isLoadingExercises } = useQuery({
-        queryKey: ['exercises', selections],
-        queryFn: () => exercisesService.getAllExercises(selections),
-        enabled: currentStep === 4 && selections.length > 0,
-    });
-
-    // Randomize Exercise Logic
-    const generatePlan = useCallback(() => {
-        if (!exercisesData?.data) return;
-
-        const allExercises = exercisesData.data;
-        let plan: any[] = [];
-        const usedIds = new Set<string>();
-
-        // Helper to pick random unique exercises
-        const pickRandom = (candidates: any[], count: number) => {
-            const available = candidates.filter(ex => !usedIds.has(ex._id));
-            const shuffled = [...available].sort(() => 0.5 - Math.random());
-            return shuffled.slice(0, count);
-        };
-
-        // Get selections for each step
-        const step1Selections = selections.filter(s => steps[0].options.includes(s)); // Primary
-        const step2Selections = selections.filter(s => steps[1].options.includes(s)); // Secondary
-        const step3Selections = selections.filter(s => steps[2].options.includes(s)); // Finisher
-
-        // 1. Primary Focus (Limit 3 total)
-        if (step1Selections.length > 0) {
-            // Filter all exercises that belong to ANY of the primary groups
-            const primaryCandidates = allExercises.filter((ex: any) =>
-                ex.belongsTo.some((bg: any) => step1Selections.includes(bg.name))
-            );
-            const picked = pickRandom(primaryCandidates, 3);
-            picked.forEach(ex => usedIds.add(ex._id));
-            plan = [...plan, ...picked];
-        }
-
-        // 2. Secondary Focus (Limit 2 total)
-        if (step2Selections.length > 0) {
-            const secondaryCandidates = allExercises.filter((ex: any) =>
-                ex.belongsTo.some((bg: any) => step2Selections.includes(bg.name))
-            );
-            const picked = pickRandom(secondaryCandidates, 2);
-            picked.forEach(ex => usedIds.add(ex._id));
-            plan = [...plan, ...picked];
-        }
-
-        // 3. Finisher (Limit 1 total)
-        if (step3Selections.length > 0) {
-            const finisherCandidates = allExercises.filter((ex: any) =>
-                ex.belongsTo.some((bg: any) => step3Selections.includes(bg.name))
-            );
-            const picked = pickRandom(finisherCandidates, 1);
-            picked.forEach(ex => usedIds.add(ex._id));
-            plan = [...plan, ...picked];
-        }
-
-        setGeneratedExercises(plan);
-    }, [exercisesData, selections]);
-
-    // specific useEffect to trigger generation when data loads
-    useEffect(() => {
-        if (exercisesData?.data && generatedExercises.length === 0) {
-            generatePlan();
-        }
-    }, [exercisesData, generatePlan, generatedExercises.length]);
-
-    // Create Workout Mutation uses generatedExercises
-    const createWorkoutMutation = useMutation({
-        mutationFn: (data: { name: string; exercises: any[] }) => {
-            const exerciseIds = generatedExercises.map((ex: any) => ex._id);
-            return workoutsService.createWorkout({ name: data.name, exercises: exerciseIds });
-        },
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['workouts'] });
-            navigate('/dashboard');
-        },
-        onError: (error: any) => {
-            console.error('Failed to create workout', error);
-            const msg = error.response?.data?.message || 'Failed to create workout';
-            alert(`Error: ${msg}`);
-        }
-    });
-
-    const handleSelection = (option: string) => {
-        const stepConfig = steps.find(s => s.id === currentStep);
-
-        if (stepConfig?.type === 'radio') {
-            const exists = selections.includes(option);
-            let newSelections = [...selections];
-
-            if (exists) {
-                newSelections = newSelections.filter(s => s !== option);
-            } else {
-                const otherOptions = stepConfig.options.filter(o => o !== option);
-                newSelections = newSelections.filter(s => !otherOptions.includes(s));
-                newSelections.push(option);
-            }
-            setSelections(newSelections);
-
-            if (!exists && stepConfig.id < 3) {
-                setTimeout(() => setCurrentStep(prev => prev + 1), 300);
-            }
-        } else {
-            if (selections.includes(option)) {
-                setSelections(selections.filter(s => s !== option));
-            } else {
-                setSelections([...selections, option]);
-            }
-        }
-    };
-
-    const nextStep = () => {
-        if (currentStep < 4) setCurrentStep(currentStep + 1);
-    };
-
-    const prevStep = () => {
-        if (currentStep > 1) setCurrentStep(currentStep - 1);
-    };
-
-    const onSubmit = (data: { name: string }) => {
-        createWorkoutMutation.mutate({ name: data.name, exercises: [] });
-    };
-
-    const currentStepData = steps.find(s => s.id === currentStep);
-
-    return (
-        <div className="container max-w-2xl mx-auto py-10 px-4">
-            <div className="mb-8">
-                <h1 className="text-3xl font-bold tracking-tight mb-2 text-primary">Create Workout</h1>
-                <div className="flex justify-between items-center text-sm text-muted-foreground">
-                    <span>Step {currentStep} of {steps.length}</span>
-                    <span>{currentStepData?.title}</span>
-                </div>
-                <div className="h-2 w-full bg-secondary mt-2 rounded-full overflow-hidden">
-                    <motion.div
-                        className="h-full bg-primary"
-                        initial={{ width: 0 }}
-                        animate={{ width: `${(currentStep / steps.length) * 100}%` }}
-                    />
-                </div>
-            </div>
-
-            <AnimatePresence mode="wait">
-                <motion.div
-                    key={currentStep}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    transition={{ duration: 0.2 }}
-                >
-                    <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-                        <CardHeader>
-                            <CardTitle>{currentStepData?.title}</CardTitle>
-                            <CardDescription>
-                                {currentStep === 1 && "Start with a major muscle group (3 Rounds)"}
-                                {currentStep === 2 && "Add secondary groups (2 Rounds)"}
-                                {currentStep === 3 && "Finish with core (1 Round)"}
-                                {currentStep === 4 && "Review your exercise plan"}
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {currentStep < 4 ? (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    {currentStepData?.options.map((option) => (
-                                        <Button
-                                            key={option}
-                                            variant={selections.includes(option) ? "default" : "outline"}
-                                            className={cn(
-                                                "h-16 text-lg justify-start px-6 transition-all",
-                                                selections.includes(option) ? "border-primary ring-1 ring-primary" : "hover:border-primary/50"
-                                            )}
-                                            onClick={() => handleSelection(option)}
-                                        >
-                                            {option}
-                                            {selections.includes(option) && (
-                                                <motion.div layoutId="check" className="ml-auto text-primary-foreground">
-                                                    ✓
-                                                </motion.div>
-                                            )}
-                                        </Button>
-                                    ))}
-                                </div>
-                            ) : (
-                                <form id="workout-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="name">Workout Name</Label>
-                                        <Input id="name" {...register('name')} placeholder="e.g., Monday Morning Grind" />
-                                        {errors.name && <p className="text-red-500 text-sm">{errors.name.message}</p>}
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label>Selected Muscle Groups</Label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {selections.map(s => (
-                                                <div key={s} className="bg-secondary px-3 py-1 rounded-full text-sm">
-                                                    {s}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2 max-h-60 overflow-y-auto pr-2 mt-4 custom-scrollbar">
-                                        <div className="flex justify-between items-center mb-2">
-                                            <Label>Generated Plan ({generatedExercises.length} Exercises)</Label>
-                                            <Button type="button" variant="outline" size="sm" onClick={generatePlan} title="Regenerate Plan">
-                                                🔄 Shuffle
-                                            </Button>
-                                        </div>
-
-                                        {isLoadingExercises ? (
-                                            <p className="text-muted-foreground p-2">Loading exercises...</p>
-                                        ) : (
-                                            <ul className="space-y-2">
-                                                {generatedExercises.map((ex: any) => (
-                                                    <li key={ex._id} className="text-sm p-3 rounded bg-muted/50 border border-transparent hover:border-border flex justify-between items-center">
-                                                        <span>{ex.name}</span>
-                                                        <span className="text-xs text-muted-foreground bg-background px-2 py-1 rounded-full border border-border">
-                                                            {ex.belongsTo.map((g: any) => g.name).join(', ')}
-                                                        </span>
-                                                    </li>
-                                                ))}
-                                                {generatedExercises.length === 0 && (
-                                                    <li className="text-muted-foreground text-sm">No exercises found.</li>
-                                                )}
-                                            </ul>
-                                        )}
-                                    </div>
-                                </form>
-                            )}
-                        </CardContent>
-                        <CardFooter className="flex justify-between">
-                            <Button variant="ghost" onClick={prevStep} disabled={currentStep === 1}>
-                                Back
-                            </Button>
-                            {currentStep < 4 ? (
-                                <Button onClick={nextStep} disabled={selections.length === 0}>
-                                    Next
-                                </Button>
-                            ) : (
-                                <Button
-                                    type="submit"
-                                    form="workout-form"
-                                    disabled={isSubmitting || isLoadingExercises || createWorkoutMutation.isPending}
-                                >
-                                    {createWorkoutMutation.isPending ? 'Saving...' : 'Save Workout'}
-                                </Button>
-                            )}
-                        </CardFooter>
-                    </Card>
-                </motion.div>
-            </AnimatePresence>
-        </div>
+  const steps = useMemo(
+    () =>
+      muscleGroupsQuery.data
+        ? withAvailableGroups(
+            planSteps,
+            muscleGroupsQuery.data.map((group) => group.name),
+          )
+        : planSteps,
+    [muscleGroupsQuery.data],
+  );
+  const exercises = exercisesQuery.data;
+  const allEquipment = useMemo(() => equipmentOptions(exercises ?? []), [exercises]);
+  const availableExercises = useMemo(
+    () => filterByEquipment(exercises ?? [], equipment),
+    [exercises, equipment],
+  );
+  const recentExerciseIds = useMemo(() => {
+    const cutoff = Date.now() - RECENT_DAYS * DAY_MS;
+    const recentSessions = (historyQuery.data?.pages[0] ?? []).filter(
+      (session) => Date.parse(session.performedAt) >= cutoff,
     );
+    return new Set(
+      recentSessions.flatMap((session) => session.entries.map((entry) => entry.exercise._id)),
+    );
+  }, [historyQuery.data]);
+
+  const equipmentStepIndex = steps.length;
+  const reviewStepIndex = steps.length + 1;
+  const totalSteps = steps.length + 2;
+  const isReview = stepIndex === reviewStepIndex;
+  const step: PlanStep | undefined = steps[stepIndex];
+  const planItems = plan?.items ?? [];
+
+  const stats = statsQuery.data;
+  const recommendedGroup =
+    stats && stats.totalSessions > 0
+      ? leastRecentlyTrained(steps[0]?.options ?? [], stats.lastTrainedByMuscleGroup)
+      : undefined;
+
+  useEffect(() => () => window.clearTimeout(advanceTimer.current), []);
+
+  // Build a plan when the review step is reached, and rebuild it when its inputs changed.
+  useEffect(() => {
+    if (!isReview || !exercises) return;
+    setPlan((current) =>
+      current?.selections === selections && current.equipment === equipment
+        ? current
+        : {
+            selections,
+            equipment,
+            items: generatePlan(availableExercises, selections, { steps, recentExerciseIds }),
+          },
+    );
+  }, [isReview, exercises, selections, equipment, availableExercises, steps, recentExerciseIds]);
+
+  function toggleGroup(currentStep: PlanStep, group: string) {
+    const selected = selections[currentStep.id] ?? [];
+    const wasSelected = selected.includes(group);
+
+    let next: string[];
+    if (wasSelected) {
+      next = selected.filter((name) => name !== group);
+    } else if (currentStep.maxSelections === 1) {
+      next = [group];
+    } else if (selected.length < currentStep.maxSelections) {
+      next = [...selected, group];
+    } else {
+      toast.info(`Pick up to ${currentStep.maxSelections} groups.`);
+      return;
+    }
+    setSelections({ ...selections, [currentStep.id]: next });
+
+    // Picking the primary focus moves straight on to the next step.
+    if (!wasSelected && stepIndex === 0) {
+      window.clearTimeout(advanceTimer.current);
+      advanceTimer.current = window.setTimeout(() => setStepIndex(1), 300);
+    }
+  }
+
+  function toggleEquipment(item: string) {
+    const current = equipment ?? allEquipment;
+    const next = current.includes(item)
+      ? current.filter((value) => value !== item)
+      : [...current, item];
+    setEquipment(next.length === allEquipment.length ? null : next);
+  }
+
+  function updatePlanItems(items: PlannedExercise[]) {
+    setPlan((current) => (current ? { ...current, items } : current));
+  }
+
+  function reshuffle() {
+    setPlan({
+      selections,
+      equipment,
+      items: generatePlan(availableExercises, selections, { steps, recentExerciseIds }),
+    });
+  }
+
+  function handleSwap(index: number) {
+    const next = swapExercise(planItems, index, availableExercises, selections, {
+      recentExerciseIds,
+    });
+    if (next === planItems) {
+      toast.info('No other exercises match this focus.');
+    } else {
+      updatePlanItems(next);
+    }
+  }
+
+  function handleToggleExercise(exercise: Exercise) {
+    const inPlan = planItems.some((item) => item.exercise._id === exercise._id);
+    updatePlanItems(
+      inPlan
+        ? planItems.filter((item) => item.exercise._id !== exercise._id)
+        : [...planItems, { exercise, stepId: 'custom' }],
+    );
+  }
+
+  const onSubmit = ({ name }: { name: string }) => {
+    createWorkout.mutate(
+      { name, exercises: planItems.map((item) => item.exercise._id) },
+      {
+        onSuccess: () => {
+          toast.success('Workout saved');
+          navigate('/dashboard');
+        },
+      },
+    );
+  };
+
+  if (exercisesQuery.isPending || muscleGroupsQuery.isPending) {
+    return <PageLoader label="Loading exercises…" />;
+  }
+
+  if (exercisesQuery.isError || muscleGroupsQuery.isError) {
+    return (
+      <ErrorState
+        message={getErrorMessage(exercisesQuery.error ?? muscleGroupsQuery.error)}
+        onRetry={() => {
+          exercisesQuery.refetch();
+          muscleGroupsQuery.refetch();
+        }}
+      />
+    );
+  }
+
+  let title = 'Review & save';
+  let description = 'Name your workout and fine-tune the exercises.';
+  let canContinue = true;
+  let content: ReactNode;
+
+  if (step) {
+    title = step.title;
+    description = step.description;
+    canContinue = !step.required || (selections[step.id]?.length ?? 0) > 0;
+    content = (
+      <fieldset>
+        <legend className="sr-only">{step.title}</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {step.options.map((group) => {
+            const selected = selections[step.id]?.includes(group) ?? false;
+            const lastTrained = stats?.lastTrainedByMuscleGroup[group];
+            return (
+              <Button
+                key={group}
+                type="button"
+                variant={selected ? 'default' : 'outline'}
+                aria-pressed={selected}
+                onClick={() => toggleGroup(step, group)}
+                className="h-auto min-h-16 flex-col items-stretch gap-1 px-5 py-3 text-left whitespace-normal"
+              >
+                <span className="flex items-center justify-between gap-2 text-lg">
+                  <span>{group}</span>
+                  <span className="flex items-center gap-2">
+                    {group === recommendedGroup && (
+                      <span
+                        className={cn(
+                          'rounded-full px-2 py-0.5 text-xs font-medium',
+                          selected ? 'bg-primary-foreground/15' : 'bg-primary/15 text-primary',
+                        )}
+                      >
+                        Recommended
+                      </span>
+                    )}
+                    {selected && <Check aria-hidden="true" />}
+                  </span>
+                </span>
+                {stats && (
+                  <span
+                    className={cn(
+                      'text-xs font-normal',
+                      selected ? 'text-primary-foreground/80' : 'text-muted-foreground',
+                    )}
+                  >
+                    {lastTrained ? `Trained ${formatDaysAgo(lastTrained)}` : 'Not trained yet'}
+                  </span>
+                )}
+              </Button>
+            );
+          })}
+        </div>
+        {step.options.length === 0 && (
+          <p className="text-sm text-muted-foreground">No muscle groups available for this step.</p>
+        )}
+      </fieldset>
+    );
+  } else if (stepIndex === equipmentStepIndex) {
+    title = 'Equipment';
+    description = 'What do you have available today? Exercises are picked to match.';
+    canContinue = equipment === null || equipment.length > 0;
+    content = (
+      <fieldset className="space-y-3">
+        <legend className="sr-only">Equipment available today</legend>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {allEquipment.map((item) => {
+            const selected = equipment === null || equipment.includes(item);
+            return (
+              <Button
+                key={item}
+                type="button"
+                variant={selected ? 'default' : 'outline'}
+                aria-pressed={selected}
+                onClick={() => toggleEquipment(item)}
+                className="h-12 justify-between px-5 capitalize"
+              >
+                {item}
+                {selected && <Check aria-hidden="true" />}
+              </Button>
+            );
+          })}
+        </div>
+        <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+          {equipment === null
+            ? 'Everything is available.'
+            : `${availableExercises.length} of ${exercises?.length ?? 0} exercises match.`}
+          {equipment !== null && (
+            <Button
+              type="button"
+              variant="link"
+              size="sm"
+              className="h-auto px-0"
+              onClick={() => setEquipment(null)}
+            >
+              Select all
+            </Button>
+          )}
+        </p>
+      </fieldset>
+    );
+  } else {
+    content = (
+      <form id="workout-form" noValidate onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <FormField label="Workout name" htmlFor="workout-name" error={errors.name?.message}>
+          <Input
+            id="workout-name"
+            placeholder="e.g. Monday Morning Grind"
+            aria-invalid={Boolean(errors.name)}
+            aria-describedby={errors.name ? 'workout-name-error' : undefined}
+            {...register('name')}
+          />
+        </FormField>
+
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-medium">
+              Your plan ({planItems.length} {planItems.length === 1 ? 'exercise' : 'exercises'})
+            </h3>
+            <div className="flex gap-2">
+              <Button type="button" variant="outline" size="sm" onClick={reshuffle}>
+                <Shuffle aria-hidden="true" />
+                Shuffle all
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
+                <Plus aria-hidden="true" />
+                Add
+              </Button>
+            </div>
+          </div>
+
+          {planItems.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              No exercises in the plan yet. Shuffle or add some.
+            </p>
+          ) : (
+            <ol aria-label="Planned exercises" className="space-y-2">
+              {planItems.map((item, index) => {
+                const name = formatExerciseName(item.exercise.name);
+                return (
+                  <li
+                    key={item.exercise._id}
+                    className="flex items-center gap-2 rounded-lg border border-border bg-background p-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {item.exercise.belongsTo.map((group) => group.name).join(', ')}
+                      </p>
+                    </div>
+                    {item.stepId !== 'custom' && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleSwap(index)}
+                        aria-label={`Swap ${name}`}
+                      >
+                        <Shuffle aria-hidden="true" />
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => updatePlanItems(planItems.filter((_, i) => i !== index))}
+                      aria-label={`Remove ${name}`}
+                    >
+                      <X aria-hidden="true" />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </div>
+
+        {createWorkout.isError && <FormError message={getErrorMessage(createWorkout.error)} />}
+      </form>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Generate a workout</h1>
+        <div className="mt-2 flex items-center justify-between text-sm text-muted-foreground">
+          <span>
+            Step {stepIndex + 1} of {totalSteps}
+          </span>
+          <span>{title}</span>
+        </div>
+        <div
+          role="progressbar"
+          aria-label="Wizard progress"
+          aria-valuemin={1}
+          aria-valuemax={totalSteps}
+          aria-valuenow={stepIndex + 1}
+          className="mt-2 h-2 overflow-hidden rounded-full bg-secondary"
+        >
+          <motion.div
+            className="h-full bg-primary"
+            initial={false}
+            animate={{ width: `${((stepIndex + 1) / totalSteps) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={stepIndex}
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: -20 }}
+          transition={{ duration: 0.2 }}
+        >
+          <Card>
+            <CardHeader>
+              <h2 className="font-semibold leading-none tracking-tight">{title}</h2>
+              <CardDescription>{description}</CardDescription>
+            </CardHeader>
+
+            <CardContent>{content}</CardContent>
+
+            <CardFooter className="justify-between">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setStepIndex((index) => index - 1)}
+                disabled={stepIndex === 0}
+              >
+                Previous
+              </Button>
+              {isReview ? (
+                <Button
+                  type="submit"
+                  form="workout-form"
+                  disabled={planItems.length === 0 || createWorkout.isPending}
+                >
+                  {createWorkout.isPending ? 'Saving…' : 'Save workout'}
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  onClick={() => setStepIndex((index) => index + 1)}
+                  disabled={!canContinue}
+                >
+                  Next
+                </Button>
+              )}
+            </CardFooter>
+          </Card>
+        </motion.div>
+      </AnimatePresence>
+
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Add exercises</DialogTitle>
+            <DialogDescription>
+              Tap exercises to add them to your plan or remove them.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 overflow-y-auto p-1">
+            <ExercisePicker
+              exercises={exercises ?? []}
+              selectedIds={planItems.map((item) => item.exercise._id)}
+              maxSelected={WORKOUT_MAX_EXERCISES}
+              onToggle={handleToggleExercise}
+            />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button>Done</Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
 }

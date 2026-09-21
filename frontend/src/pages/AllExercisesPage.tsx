@@ -1,142 +1,150 @@
-import { AnimatePresence, motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import exercisesService from '../services/exercises.service';
+import type { Exercise } from '@workout-planner/shared';
+import { motion } from 'framer-motion';
+import { Dumbbell } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { EmptyState, ErrorState, PageLoader } from '@/components/feedback';
+import { PageHeader } from '@/components/PageHeader';
+import { SearchInput } from '@/components/ui/search-input';
+import { MuscleGroupFilter } from '@/components/workouts/MuscleGroupFilter';
+import { useExercises } from '@/hooks/queries';
+import { getErrorMessage } from '@/lib/api';
+import { filterExercises, muscleGroupNamesOf } from '@/lib/exercises';
+import { formatExerciseName } from '@/lib/format';
 
-interface Exercise {
-  _id: string;
-  name: string;
-  description: string;
-  usedWith: string[];
-  belongsTo?: {
-    name: string;
-  };
+interface ExerciseFlipCardProps {
+  exercise: Exercise;
+  flipped: boolean;
+  onFlip: () => void;
+}
+
+function ExerciseFlipCard({ exercise, flipped, onFlip }: ExerciseFlipCardProps) {
+  return (
+    <button
+      type="button"
+      onClick={onFlip}
+      aria-pressed={flipped}
+      className="block h-72 w-full rounded-xl text-left perspective-distant focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+    >
+      <motion.span
+        className="relative block size-full transform-3d"
+        initial={false}
+        animate={{ rotateY: flipped ? 180 : 0 }}
+        transition={{ duration: 0.5, ease: 'easeInOut' }}
+      >
+        {/* Front */}
+        <span
+          aria-hidden={flipped}
+          className="absolute inset-0 flex flex-col gap-3 rounded-xl border border-border bg-card p-6 backface-hidden"
+        >
+          <span className="text-xl font-semibold">{formatExerciseName(exercise.name)}</span>
+          <span className="flex flex-wrap gap-1.5">
+            {exercise.belongsTo.map((group) => (
+              <span
+                key={group._id}
+                className="rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary"
+              >
+                {group.name}
+              </span>
+            ))}
+          </span>
+          <span className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">
+            {exercise.description}
+          </span>
+          <span className="mt-auto text-xs text-muted-foreground">Tap to see equipment</span>
+        </span>
+
+        {/* Back */}
+        <span
+          aria-hidden={!flipped}
+          className="absolute inset-0 flex rotate-y-180 flex-col gap-4 rounded-xl border border-border bg-background p-6 backface-hidden"
+        >
+          <span className="text-lg font-semibold">Equipment</span>
+          <span className="flex flex-wrap gap-2">
+            {exercise.usedWith.length > 0 ? (
+              exercise.usedWith.map((item) => (
+                <span key={item} className="rounded-full bg-secondary px-3 py-1 text-xs capitalize">
+                  {item}
+                </span>
+              ))
+            ) : (
+              <span className="text-sm text-muted-foreground">No special equipment</span>
+            )}
+          </span>
+          <span className="text-sm text-muted-foreground">
+            {exercise.metric === 'time'
+              ? 'Logged as time held, in seconds.'
+              : 'Logged as reps, with optional weight.'}
+          </span>
+        </span>
+      </motion.span>
+    </button>
+  );
 }
 
 function AllExercisesPage() {
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
+  const exercisesQuery = useExercises();
+  const [query, setQuery] = useState('');
+  const [group, setGroup] = useState<string | null>(null);
+  const [flipped, setFlipped] = useState<Record<string, boolean>>({});
 
-  useEffect(() => {
-    const fetchExercises = async () => {
-      try {
-        const response = await exercisesService.getAllExercises();
-        setExercises(response.data);
-      } catch (error) {
-        console.error('Error fetching exercises', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+  const exercises = exercisesQuery.data ?? [];
+  const groups = useMemo(
+    () => muscleGroupNamesOf(exercisesQuery.data ?? []),
+    [exercisesQuery.data],
+  );
+  const visible = filterExercises(exercises, query, group);
 
-    fetchExercises();
-  }, []);
+  if (exercisesQuery.isPending) {
+    return <PageLoader label="Loading exercises…" />;
+  }
 
-  const handleCardFlip = (id: string) => {
-    setFlippedCards((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  };
-
-  if (loading) {
+  if (exercisesQuery.isError) {
     return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-32 w-32 border-t-2 border-b-2 border-blue-500"></div>
-      </div>
+      <ErrorState
+        message={getErrorMessage(exercisesQuery.error)}
+        onRetry={() => exercisesQuery.refetch()}
+      />
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 p-8">
-      <h1 className="text-4xl font-bold text-center text-white mb-10 tracking-tight">Exercises</h1>
+    <div className="space-y-6">
+      <PageHeader
+        title="Exercise library"
+        description="Every exercise, what it trains, and what you need to do it."
+      />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-        <AnimatePresence>
-          {exercises.map((exercise) => (
-            <div
-              key={exercise._id}
-              className="relative h-80 w-full cursor-pointer perspective-1000"
-              onClick={() => handleCardFlip(exercise._id)}
-            >
-              <motion.div
-                className="w-full h-full relative preserve-3d"
-                initial={false}
-                animate={{ rotateY: flippedCards[exercise._id] ? 180 : 0 }}
-                transition={{ duration: 0.6, type: 'spring' }}
-                style={{ transformStyle: 'preserve-3d' }}
-              >
-                {/* Front Side */}
-                <div className="absolute inset-0 backface-hidden">
-                  <Card className="h-full bg-white/5 border-none backdrop-blur-sm shadow-xl hover:shadow-2xl transition-shadow duration-300 text-white overflow-hidden">
-                    <CardHeader className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 p-6">
-                      <CardTitle className="text-2xl font-semibold capitalize tracking-wide">
-                        {exercise.name}
-                      </CardTitle>
-                      {exercise.belongsTo && (
-                        <span className="text-xs font-mono text-blue-300 bg-blue-900/30 px-2 py-1 rounded inline-block mt-2">
-                          {exercise.belongsTo.name}
-                        </span>
-                      )}
-                    </CardHeader>
-                    <CardContent className="p-6">
-                      <p className="text-gray-300 line-clamp-4 leading-relaxed">
-                        {exercise.description}
-                      </p>
-                      <div className="absolute bottom-4 right-4 text-xs text-gray-500">
-                        Click for details
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Back Side */}
-                <div
-                  className="absolute inset-0 backface-hidden h-full"
-                  style={{ transform: 'rotateY(180deg)' }}
-                >
-                  <Card className="h-full bg-black border border-gray-800 shadow-2xl text-white">
-                    <CardHeader className="p-6 border-b border-gray-800">
-                      <CardTitle className="text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400">
-                        Equipment & Tips
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-6 flex flex-col justify-center h-4/5">
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-2">
-                            Used With
-                          </h4>
-                          <div className="flex flex-wrap gap-2">
-                            {exercise.usedWith && exercise.usedWith.length > 0 ? (
-                              exercise.usedWith.map((item, idx) => (
-                                <span
-                                  key={`${item}-${idx}`}
-                                  className="px-3 py-1 bg-gray-800 rounded-full text-xs text-gray-200"
-                                >
-                                  {item}
-                                </span>
-                              ))
-                            ) : (
-                              <span className="text-gray-500 italic text-sm">
-                                No special equipment
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              </motion.div>
-            </div>
-          ))}
-        </AnimatePresence>
+      <div className="space-y-3">
+        <SearchInput
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search exercises"
+          aria-label="Search exercises"
+          className="max-w-md"
+        />
+        <MuscleGroupFilter groups={groups} value={group} onChange={setGroup} />
       </div>
 
-      {exercises.length === 0 && (
-        <div className="text-center text-gray-500 mt-20 text-lg">No exercises found.</div>
+      {visible.length === 0 ? (
+        <EmptyState
+          icon={Dumbbell}
+          title="No exercises found"
+          description="Try a different search or muscle group."
+        />
+      ) : (
+        <ul className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {visible.map((exercise) => (
+            <li key={exercise._id}>
+              <ExerciseFlipCard
+                exercise={exercise}
+                flipped={Boolean(flipped[exercise._id])}
+                onFlip={() =>
+                  setFlipped((current) => ({ ...current, [exercise._id]: !current[exercise._id] }))
+                }
+              />
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

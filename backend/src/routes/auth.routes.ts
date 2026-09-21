@@ -1,115 +1,64 @@
+import { type AuthUser, loginSchema, signupSchema } from '@workout-planner/shared';
 import bcrypt from 'bcryptjs';
-import type { Request, Response } from 'express';
 import express from 'express';
-import jwt from 'jsonwebtoken';
-import { z } from 'zod';
-import { isAuthenticated, type RequestWithPayload } from '../middleware/jwt.middleware.ts';
+import { rateLimit } from 'express-rate-limit';
+import { env } from '../config/env.ts';
+import { getAuth, isAuthenticated, signToken } from '../middleware/jwt.middleware.ts';
 import { User } from '../models/User.model.ts';
+import { HttpError } from '../utils/http-error.ts';
+import { validate } from '../utils/validate.ts';
 
 const router = express.Router();
 const saltRounds = 10;
 
-// Zod Schemas
-const signupSchema = z.object({
-  email: z.string().email({ message: 'Provide a valid email address.' }).trim(),
-  password: z
-    .string()
-    .min(6, { message: 'Password must have at least 6 characters.' })
-    .regex(/(?=.*\d)(?=.*[a-z])(?=.*[A-Z])/, {
-      message: 'Password must contain one number, one lowercase and one uppercase letter.',
-    }),
-  name: z.string().min(1, { message: 'Name is required.' }).trim(),
+// Compared against when the email is unknown, so both login failures take about as long.
+const dummyPasswordHash = bcrypt.hashSync('not-a-real-password', saltRounds);
+
+const authRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { message: 'Too many attempts. Please try again in a few minutes.' },
+  skip: () => env.NODE_ENV === 'test',
 });
 
-const loginSchema = z.object({
-  email: z.string().email().trim(),
-  password: z.string(),
-});
+function toAuthUser(user: { _id: unknown; email: string; name: string }): AuthUser {
+  return { _id: String(user._id), email: user.email, name: user.name };
+}
 
 // POST /auth/signup
-router.post('/signup', async (req: Request, res: Response) => {
-  try {
-    const validation = signupSchema.safeParse(req.body);
+router.post('/signup', authRateLimit, async (req, res) => {
+  const { email, password, name } = validate(signupSchema, req.body);
 
-    if (!validation.success) {
-      res.status(400).json({ message: validation.error.errors[0].message });
-      return;
-    }
-
-    const { email, password, name } = validation.data;
-    const lowerEmail = email.toLowerCase();
-
-    const foundUser = await User.findOne({ email: lowerEmail });
-
-    if (foundUser) {
-      res.status(400).json({ message: 'User already exists.' });
-      return;
-    }
-
-    const salt = bcrypt.genSaltSync(saltRounds);
-    const hashedPassword = bcrypt.hashSync(password, salt);
-
-    const createdUser = await User.create({
-      email: lowerEmail,
-      name,
-      password: hashedPassword,
-    });
-
-    const { email: userEmail, name: userName, _id } = createdUser;
-    const user = { email: userEmail, name: userName, _id };
-
-    res.status(201).json({ user: user });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Internal Server Error' });
+  if (await User.exists({ email })) {
+    throw new HttpError(409, 'An account with this email already exists.');
   }
+
+  const hashedPassword = await bcrypt.hash(password, saltRounds);
+  const user = toAuthUser(await User.create({ email, name, password: hashedPassword }));
+
+  res.status(201).json({ user, authToken: signToken(user) });
 });
 
 // POST /auth/login
-router.post('/login', async (req: Request, res: Response) => {
-  try {
-    const validation = loginSchema.safeParse(req.body);
+router.post('/login', authRateLimit, async (req, res) => {
+  const { email, password } = validate(loginSchema, req.body);
 
-    if (!validation.success) {
-      res.status(400).json({ message: 'Provide valid email and password.' });
-      return;
-    }
+  const foundUser = await User.findOne({ email }).select('+password');
+  const passwordCorrect = await bcrypt.compare(password, foundUser?.password ?? dummyPasswordHash);
 
-    const { email, password } = validation.data;
-    const lowerEmail = email.toLowerCase();
-
-    const foundUser = await User.findOne({ email: lowerEmail });
-
-    if (!foundUser) {
-      res.status(401).json({ message: 'User not found.' });
-      return;
-    }
-
-    const passwordCorrect = bcrypt.compareSync(password, foundUser.password as string);
-
-    if (passwordCorrect) {
-      const { _id, email, name } = foundUser;
-      const payload = { _id, email, name };
-
-      const authToken = jwt.sign(payload, process.env.TOKEN_SECRET as string, {
-        algorithm: 'HS256',
-        expiresIn: '6h',
-      });
-
-      res.status(200).json({ authToken: authToken });
-    } else {
-      res.status(401).json({ message: 'Unable to authenticate the user' });
-    }
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Internal Server Error' });
+  if (!foundUser || !passwordCorrect) {
+    throw new HttpError(401, 'Invalid email or password.');
   }
+
+  const user = toAuthUser(foundUser);
+  res.json({ user, authToken: signToken(user) });
 });
 
 // GET /auth/verify
-router.get('/verify', isAuthenticated, (req: RequestWithPayload, res: Response) => {
-  console.log(`req.payload`, req.payload);
-  res.status(200).json(req.payload);
+router.get('/verify', isAuthenticated, (req, res) => {
+  res.json(getAuth(req));
 });
 
 export default router;

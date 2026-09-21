@@ -1,0 +1,25 @@
+{
+  "name": "workout-planner",
+  "private": true,
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "dev": "pnpm --filter backend --filter frontend --parallel run dev",
+    "build": "pnpm --filter frontend run build",
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check .",
+    "check:fix": "biome check --write .",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "seed": "pnpm --filter backend run seed",
+    "check-data": "pnpm --filter backend run check-data",
+    "env:create": "node scripts/create-env.mjs",
+    "preview": "pnpm build && pnpm --filter backend --filter frontend --parallel run preview"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.13"
+  }
+}

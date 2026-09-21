@@ -1,88 +1,44 @@
 @import "tailwindcss";
 
 @theme {
-    --font-sans: 'Inter', system-ui, sans-serif;
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
-    --color-background: #09090b;
-    /* Zinc 950 */
-    --color-foreground: #fafafa;
-    /* Zinc 50 */
+  --color-background: #09090b; /* zinc-950 */
+  --color-foreground: #fafafa; /* zinc-50 */
 
-    --color-primary: #22c55e;
-    /* Green 500 */
-    --color-primary-foreground: #09090b;
+  --color-card: #18181b; /* zinc-900 */
+  --color-card-foreground: #fafafa;
 
-    --color-secondary: #27272a;
-    /* Zinc 800 */
-    --color-secondary-foreground: #fafafa;
+  --color-primary: #22c55e; /* green-500 */
+  --color-primary-foreground: #09090b;
 
-    --color-muted: #27272a;
-    /* Zinc 800 */
-    --color-muted-foreground: #a1a1aa;
-    /* Zinc 400 */
+  --color-secondary: #27272a; /* zinc-800 */
+  --color-secondary-foreground: #fafafa;
 
-    --color-accent: #27272a;
-    /* Zinc 800 */
-    --color-accent-foreground: #fafafa;
+  --color-muted: #27272a;
+  --color-muted-foreground: #a1a1aa; /* zinc-400 */
 
-    --color-destructive: #ef4444;
-    /* Red 500 */
-    --color-destructive-foreground: #fafafa;
+  --color-accent: #27272a;
+  --color-accent-foreground: #fafafa;
 
-    --color-border: #27272a;
-    /* Zinc 800 */
-    --color-input: #27272a;
-    /* Zinc 800 */
-    --color-ring: #22c55e;
-    /* Green 500 */
+  --color-destructive: #dc2626; /* red-600: keeps white text above 4.5:1 contrast */
+  --color-destructive-foreground: #fafafa;
 
-    --radius-lg: 0.5rem;
-    --radius-md: calc(0.5rem - 2px);
-    --radius-sm: calc(0.5rem - 4px);
+  --color-border: #27272a;
+  --color-input: #3f3f46; /* zinc-700 */
+  --color-ring: #22c55e;
 
-    --animate-accordion-down: accordion-down 0.2s ease-out;
-    --animate-accordion-up: accordion-up 0.2s ease-out;
-
-    @keyframes accordion-down {
-        from {
-            height: 0
-        }
-
-        to {
-            height: var(--radix-accordion-content-height)
-        }
-    }
-
-    @keyframes accordion-up {
-        from {
-            height: var(--radix-accordion-content-height)
-        }
-
-        to {
-            height: 0
-        }
-    }
+  --radius-lg: 0.5rem;
+  --radius-md: calc(0.5rem - 2px);
+  --radius-sm: calc(0.5rem - 4px);
 }
 
-/* Base styles for dark mode */
 :root {
-    color-scheme: dark;
+  color-scheme: dark;
 }
 
 body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
-    font-feature-settings: "rlig" 1, "calt" 1;
-}
-
-@layer utilities {
-    .step {
-        counter-increment: step;
-    }
-
-    .step:before {
-        @apply absolute w-9 h-9 bg-muted rounded-full font-mono font-medium text-center text-base inline-flex items-center justify-center -indent-px border-4 border-background;
-        @apply ml-[-50px] mt-[-4px];
-        content: counter(step);
-    }
+  background-color: var(--color-background);
+  color: var(--color-foreground);
 }

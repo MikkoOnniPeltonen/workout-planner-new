@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <title>Workout Planner</title>
+  <rect width="32" height="32" rx="7" fill="#09090b"/>
+  <g fill="#22c55e">
+    <rect x="4" y="11" width="4" height="10" rx="1.5"/>
+    <rect x="8" y="8" width="4" height="16" rx="1.5"/>
+    <rect x="12" y="14.5" width="8" height="3" rx="1"/>
+    <rect x="20" y="8" width="4" height="16" rx="1.5"/>
+    <rect x="24" y="11" width="4" height="10" rx="1.5"/>
+  </g>
+</svg>

@@ -1,130 +1,128 @@
-import { type FormEvent, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { Button } from '../components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from '../components/ui/card';
-import authService from '../services/auth.service';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useMutation } from '@tanstack/react-query';
+import { passwordRules, type SignupInput, signupSchema } from '@workout-planner/shared';
+import { Check, Circle } from 'lucide-react';
+import { useForm, useWatch } from 'react-hook-form';
+import { Link } from 'react-router-dom';
+import { AuthCard } from '@/components/auth/AuthCard';
+import { Button } from '@/components/ui/button';
+import { FormError, FormField } from '@/components/ui/form-field';
+import { Input } from '@/components/ui/input';
+import { useAuth } from '@/context/auth.context';
+import { getErrorMessage } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import authService from '@/services/auth.service';
+
+function PasswordRules({ password, showErrors }: { password: string; showErrors: boolean }) {
+  return (
+    <ul id="password-rules" className="grid gap-1 text-sm sm:grid-cols-2">
+      {passwordRules.map((rule) => {
+        const met = rule.test(password);
+        return (
+          <li
+            key={rule.label}
+            data-met={met}
+            className={cn(
+              'flex items-center gap-2',
+              met ? 'text-primary' : showErrors ? 'text-red-400' : 'text-muted-foreground',
+            )}
+          >
+            {met ? (
+              <Check className="size-4 shrink-0" aria-hidden="true" />
+            ) : (
+              <Circle className="size-4 shrink-0" aria-hidden="true" />
+            )}
+            <span>{rule.label}</span>
+            <span className="sr-only">{met ? '(done)' : '(missing)'}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 function SignupPage() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
+  const { logIn } = useAuth();
+  const {
+    register,
+    handleSubmit,
+    control,
+    formState: { errors },
+  } = useForm({
+    resolver: zodResolver(signupSchema),
+    defaultValues: { name: '', email: '', password: '' },
   });
-  const [error, setError] = useState<string | null>(null);
-  const navigate = useNavigate();
-
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    setError(null);
-    try {
-      await authService.signup(formData);
-      navigate('/login');
-    } catch (error: any) {
-      const errorMessage = error.response?.data?.message || 'Signup failed. Try again.';
-      setError(errorMessage);
-      console.error(error);
-    }
-  };
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
-    });
-  };
+  const password = useWatch({ control, name: 'password' });
+  // New accounts are logged in straight away; the auth guard then redirects to the dashboard.
+  const signup = useMutation({
+    mutationFn: (input: SignupInput) => authService.signup(input),
+    onSuccess: logIn,
+  });
 
   return (
-    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md shadow-2xl bg-gray-900 border-gray-800 text-white">
-        <CardHeader className="space-y-4">
-          <div className="text-center">
-            <CardTitle className="text-3xl font-bold tracking-tight">Create an account</CardTitle>
-            <CardDescription className="text-gray-400 mt-2">
-              Enter your details below to create your account
-            </CardDescription>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="space-y-2">
-              <label
-                htmlFor="name"
-                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-gray-200"
-              >
-                Name
-              </label>
-              <input
-                id="name"
-                name="name"
-                value={formData.name}
-                onChange={handleChange}
-                type="text"
-                placeholder="Your name"
-                className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-white"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="email" className="text-sm font-medium leading-none text-gray-200">
-                Email
-              </label>
-              <input
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                type="email"
-                placeholder="m@example.com"
-                className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-medium leading-none text-gray-200">
-                Password
-              </label>
-              <input
-                id="password"
-                name="password"
-                value={formData.password}
-                onChange={handleChange}
-                type="password"
-                className="flex h-10 w-full rounded-md border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                required
-              />
-            </div>
+    <AuthCard
+      title="Create an account"
+      description="Plan workouts, log your sessions and see real progress."
+      footer={
+        <>
+          Already have an account?{' '}
+          <Link
+            to="/login"
+            className="font-medium text-foreground underline-offset-4 hover:underline"
+          >
+            Log in
+          </Link>
+        </>
+      }
+    >
+      <form
+        noValidate
+        className="space-y-4"
+        onSubmit={handleSubmit((input) => signup.mutate(input))}
+      >
+        <FormField label="Name" htmlFor="name" error={errors.name?.message}>
+          <Input
+            id="name"
+            autoComplete="name"
+            placeholder="Your name"
+            aria-invalid={Boolean(errors.name)}
+            aria-describedby={errors.name ? 'name-error' : undefined}
+            {...register('name')}
+          />
+        </FormField>
+        <FormField label="Email" htmlFor="email" error={errors.email?.message}>
+          <Input
+            id="email"
+            type="email"
+            autoComplete="email"
+            placeholder="name@example.com"
+            aria-invalid={Boolean(errors.email)}
+            aria-describedby={errors.email ? 'email-error' : undefined}
+            {...register('email')}
+          />
+        </FormField>
+        <FormField
+          label="Password"
+          htmlFor="password"
+          hint={<PasswordRules password={password} showErrors={Boolean(errors.password)} />}
+        >
+          <Input
+            id="password"
+            type="password"
+            autoComplete="new-password"
+            aria-invalid={Boolean(errors.password)}
+            aria-describedby="password-rules"
+            {...register('password')}
+          />
+        </FormField>
 
-            {error && (
-              <div className="p-3 rounded-md bg-red-900/30 border border-red-900 text-red-300 text-sm font-medium">
-                {error}
-              </div>
-            )}
+        {signup.isError && <FormError message={getErrorMessage(signup.error)} />}
 
-            <Button
-              type="submit"
-              className="w-full bg-white text-black hover:bg-gray-200 font-semibold mt-4 h-11"
-            >
-              Sign up
-            </Button>
-          </form>
-        </CardContent>
-        <CardFooter className="flex justify-center border-t border-gray-800 pt-6">
-          <p className="text-sm text-gray-400">
-            Already have an account?{' '}
-            <Link to="/login" className="font-medium text-white hover:underline underline-offset-4">
-              Log in
-            </Link>
-          </p>
-        </CardFooter>
-      </Card>
-    </div>
+        <Button type="submit" size="lg" className="w-full" disabled={signup.isPending}>
+          {signup.isPending ? 'Creating account…' : 'Create account'}
+        </Button>
+      </form>
+    </AuthCard>
   );
 }
 

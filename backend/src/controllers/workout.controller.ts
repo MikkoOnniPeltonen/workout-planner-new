@@ -1,85 +1,58 @@
+import { workoutInputSchema } from '@workout-planner/shared';
 import type { Request, Response } from 'express';
+import { getAuth } from '../middleware/jwt.middleware.ts';
 import { workoutService } from '../services/workout.service.ts';
+import { HttpError } from '../utils/http-error.ts';
+import { idParamsSchema, validate } from '../utils/validate.ts';
 
 class WorkoutController {
-    async createWorkout(req: any, res: Response) {
-        try {
-            console.log('Create Workout Request Payload:', req.payload);
-            console.log('Create Workout Request Body:', req.body);
-            const userId = req.payload._id;
-            const workout = await workoutService.createWorkout({ ...req.body, belongsTo: userId });
-            res.status(201).json(workout);
-        } catch (error: any) {
-            console.error('Error creating workout FULL:', error);
-            res.status(500).json({ message: error.message || 'Error creating workout' });
-        }
+  async getAllWorkouts(req: Request, res: Response) {
+    const { _id: userId } = getAuth(req);
+    res.json(await workoutService.getAllWorkouts(userId));
+  }
+
+  async getWorkoutById(req: Request, res: Response) {
+    const { _id: userId } = getAuth(req);
+    const { id } = validate(idParamsSchema, req.params);
+    const workout = await workoutService.getWorkoutById(id, userId);
+
+    if (!workout) {
+      throw new HttpError(404, 'Workout not found');
     }
 
-    async getAllWorkouts(req: any, res: Response) {
-        try {
-            const userId = req.payload._id;
-            const workouts = await workoutService.getAllWorkouts(userId);
-            res.status(200).json(workouts);
-        } catch (error) {
-            console.error('Error fetching workouts:', error);
-            res.status(500).json({ message: 'Error fetching workouts' });
-        }
+    res.json(workout);
+  }
+
+  async createWorkout(req: Request, res: Response) {
+    const { _id: userId } = getAuth(req);
+    const input = validate(workoutInputSchema, req.body);
+    res.status(201).json(await workoutService.createWorkout(userId, input));
+  }
+
+  async updateWorkout(req: Request, res: Response) {
+    const { _id: userId } = getAuth(req);
+    const { id } = validate(idParamsSchema, req.params);
+    const input = validate(workoutInputSchema, req.body);
+    const workout = await workoutService.updateWorkout(id, userId, input);
+
+    if (!workout) {
+      throw new HttpError(404, 'Workout not found');
     }
 
-    async getWorkoutById(req: Request, res: Response) {
-        try {
-            const { id } = req.params;
-            const workout = await workoutService.getWorkoutById(id as string);
+    res.json(workout);
+  }
 
-            if (!workout) {
-                res.status(404).json({ message: 'Workout not found' });
-                return;
-            }
+  async deleteWorkout(req: Request, res: Response) {
+    const { _id: userId } = getAuth(req);
+    const { id } = validate(idParamsSchema, req.params);
+    const workout = await workoutService.deleteWorkout(id, userId);
 
-            res.status(200).json(workout);
-        } catch (error) {
-            console.error('Error fetching workout:', error);
-            res.status(500).json({ message: 'Error fetching workout' });
-        }
+    if (!workout) {
+      throw new HttpError(404, 'Workout not found');
     }
 
-    async updateWorkout(req: any, res: Response) {
-        try {
-            const { id } = req.params;
-            const userId = req.payload._id; // Get authenticated user ID
-
-            const updatedWorkout = await workoutService.updateWorkout(id as string, userId, req.body);
-
-            if (!updatedWorkout) {
-                res.status(404).json({ message: 'Workout not found or unauthorized' });
-                return;
-            }
-
-            res.status(200).json(updatedWorkout);
-        } catch (error) {
-            console.error('Error updating workout:', error);
-            res.status(500).json({ message: 'Error updating workout' });
-        }
-    }
-
-    async deleteWorkout(req: any, res: Response) {
-        try {
-            const { id } = req.params;
-            const userId = req.payload._id; // Get authenticated user ID
-
-            const deletedWorkout = await workoutService.deleteWorkout(id as string, userId);
-
-            if (!deletedWorkout) {
-                res.status(404).json({ message: 'Workout not found or unauthorized' });
-                return;
-            }
-
-            res.status(200).json(deletedWorkout);
-        } catch (error) {
-            console.error('Error deleting workout:', error);
-            res.status(500).json({ message: 'Error deleting workout' });
-        }
-    }
+    res.status(204).end();
+  }
 }
 
 export const workoutController = new WorkoutController();

@@ -1,20 +1,20 @@
-import { useContext } from 'react';
 import { Navigate, Outlet, useLocation } from 'react-router-dom';
-import { AuthContext } from '@/context/auth.context';
+import { PageLoader } from '@/components/feedback';
+import { useAuth } from '@/context/auth.context';
 
 function RequireAuth() {
-    const { isLoggedIn, isLoading } = useContext(AuthContext);
-    const location = useLocation();
+  const { isLoggedIn, isLoading } = useAuth();
+  const location = useLocation();
 
-    if (isLoading) {
-        return <div className="h-screen flex items-center justify-center">Loading...</div>;
-    }
+  if (isLoading) {
+    return <PageLoader />;
+  }
 
-    if (!isLoggedIn) {
-        return <Navigate to="/login" state={{ from: location }} replace />;
-    }
+  if (!isLoggedIn) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
 
-    return <Outlet />;
+  return <Outlet />;
 }
 
 export default RequireAuth;

@@ -1,6 +1,5 @@
 import { type InferSchemaType, model, Schema } from 'mongoose';
 
-// Define the schema
 const userSchema = new Schema(
   {
     name: {
@@ -18,6 +17,8 @@ const userSchema = new Schema(
     password: {
       type: String,
       required: [true, 'Password is required.'],
+      // Never returned by queries unless explicitly requested with .select('+password').
+      select: false,
     },
   },
   {
@@ -25,8 +26,6 @@ const userSchema = new Schema(
   },
 );
 
-// Mongoose "InferSchemaType" automatically generates the TypeScript interface
-// so we don't have to manually keep an interface in sync with the schema.
 export type UserType = InferSchemaType<typeof userSchema>;
 
 export const User = model('User', userSchema);

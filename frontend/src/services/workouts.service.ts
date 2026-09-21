@@ -1,29 +1,29 @@
-import authService from './auth.service';
-
-interface CreateWorkoutData {
-  name: string;
-  exercises: string[]; // array of exercise IDs
-}
+import type { Workout, WorkoutInput } from '@workout-planner/shared';
+import { api } from '@/lib/api';
 
 class WorkoutsService {
-  getAllWorkouts = () => {
-    return authService.api.get('/workouts');
+  getAllWorkouts = async () => {
+    const response = await api.get<Workout[]>('/workouts');
+    return response.data;
   };
 
-  getWorkoutById = (id: string) => {
-    return authService.api.get(`/workouts/${id}`);
+  getWorkoutById = async (id: string) => {
+    const response = await api.get<Workout>(`/workouts/${id}`);
+    return response.data;
   };
 
-  createWorkout = (data: CreateWorkoutData) => {
-    return authService.api.post('/workouts', data);
+  createWorkout = async (input: WorkoutInput) => {
+    const response = await api.post<Workout>('/workouts', input);
+    return response.data;
   };
 
-  updateWorkout = (id: string, data: Partial<CreateWorkoutData>) => {
-    return authService.api.put(`/workouts/${id}`, data);
+  updateWorkout = async (id: string, input: WorkoutInput) => {
+    const response = await api.put<Workout>(`/workouts/${id}`, input);
+    return response.data;
   };
 
-  deleteWorkout = (id: string) => {
-    return authService.api.delete(`/workouts/${id}`);
+  deleteWorkout = async (id: string) => {
+    await api.delete(`/workouts/${id}`);
   };
 }
 
