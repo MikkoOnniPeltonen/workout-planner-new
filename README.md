@@ -12,9 +12,11 @@ New here? The [step-by-step guide](docs/GUIDE.md) walks through setup with a fre
 
 - **Accounts:** sign up and log in with JWT authentication. Password rules are shared between the API and the form.
 - **Workouts:** build a workout by hand, or generate one from a primary focus, secondary focus, finisher and available equipment. Swap, remove or add exercises before saving.
+- **Quick start:** new users can jump straight to a sensible first plan, then adjust it before saving.
 - **Session logging:** follow a workout or log freestyle. Each exercise shows last time's sets; ticking a set fills in the target.
+- **Repeatable training:** the logger explains when to repeat a previous target, remembers your preferred rest length and keeps the suggested target visible.
 - **History:** every session grouped by week, with editing and deleting.
-- **Statistics:** sessions, sets, volume and week streak compared with the previous period, weekly charts, sets per muscle group, and estimated one-rep-max records.
+- **Statistics:** sessions, sets, volume and week streak compared with the previous period, weekly charts, sets per muscle group, estimated one-rep-max records and portable JSON export.
 - **Exercise library:** searchable and filterable, with the muscle groups and equipment for each exercise.
 
 ## Tech stack

@@ -43,7 +43,13 @@ describe('WorkoutWizard', () => {
     vi.mocked(sessionsService.getStats).mockResolvedValue(
       sessionStats({
         totalSessions: 2,
-        lastTrainedByMuscleGroup: { Back: daysAgo(1), Legs: daysAgo(6) },
+        lastTrainedByMuscleGroup: {
+          Back: daysAgo(1),
+          Chest: daysAgo(2),
+          Shoulders: daysAgo(3),
+          Arms: daysAgo(4),
+          Legs: daysAgo(6),
+        },
       }),
     );
   });

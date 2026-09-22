@@ -4,21 +4,21 @@ import { useAuth } from '@/context/auth.context';
 
 const stories = [
   {
-    image: '/person-running.webp',
-    alt: 'person running',
+    image: '/hero-training.webp',
+    alt: 'athlete taking a quiet moment after strength training',
     title: 'How to go hard',
     subtitle: 'The Strength inside you',
   },
   {
-    image: '/person-relaxing.webp',
-    alt: 'person relaxing',
+    image: '/hero-recovery.webp',
+    alt: 'athlete stretching in a softly lit training studio',
     title: 'How to keep a balance',
     subtitle: 'The other side of you',
     note: 'Remembering how to see beauty in fatigue',
   },
   {
-    image: '/future-self.webp',
-    alt: 'future self',
+    image: '/hero-progress.webp',
+    alt: 'runner moving along a waterfront path at dawn',
     title: 'Your way of doing greatness',
     subtitle: 'Get to know yourself to the last drop of sweat',
   },

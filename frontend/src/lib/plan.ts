@@ -18,7 +18,7 @@ export const planSteps: PlanStep[] = [
     id: 'primary',
     title: 'Primary focus',
     description: 'Start with a major muscle group. It gets three exercises.',
-    options: ['Legs', 'Back'],
+    options: ['Legs', 'Back', 'Chest', 'Shoulders', 'Arms'],
     exerciseCount: 3,
     maxSelections: 1,
     required: true,

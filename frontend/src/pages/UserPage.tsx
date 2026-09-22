@@ -1,6 +1,6 @@
 import type { Workout } from '@workout-planner/shared';
 import { motion } from 'framer-motion';
-import { Dumbbell, Plus, Sparkles } from 'lucide-react';
+import { Dumbbell, Plus, Sparkles, Zap } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -51,6 +51,15 @@ function UserPage() {
     </>
   );
 
+  const quickStartAction = (
+    <Button asChild>
+      <Link to="/create-workout?quick=1">
+        <Zap aria-hidden="true" />
+        Quick start
+      </Link>
+    </Button>
+  );
+
   let content: ReactNode;
   if (workoutsQuery.isPending) {
     content = <PageLoader label="Loading your workouts…" />;
@@ -67,7 +76,12 @@ function UserPage() {
         icon={Dumbbell}
         title="No workouts yet"
         description="Generate a plan in a few taps, or build one yourself from the exercise library."
-        action={actions}
+        action={
+          <>
+            {quickStartAction}
+            {actions}
+          </>
+        }
       />
     );
   } else {

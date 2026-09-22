@@ -5,6 +5,7 @@ import {
   type WorkoutInput,
   workoutInputSchema,
 } from '@workout-planner/shared';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -24,6 +25,7 @@ import { Input } from '@/components/ui/input';
 import { ExercisePicker } from '@/components/workouts/ExercisePicker';
 import { useCreateWorkout, useExercises, useUpdateWorkout } from '@/hooks/queries';
 import { getErrorMessage } from '@/lib/api';
+import { formatExerciseName } from '@/lib/format';
 
 interface WorkoutFormDialogProps {
   open: boolean;
@@ -107,6 +109,54 @@ function WorkoutForm({ workout, onDone }: { workout?: Workout; onDone: () => voi
               <legend className="mb-2 text-sm font-medium">
                 Exercises ({field.value.length}/{WORKOUT_MAX_EXERCISES})
               </legend>
+              {field.value.length > 0 && (
+                <ol className="space-y-2" aria-label="Workout exercise order">
+                  {field.value.map((exerciseId, index) => {
+                    const exercise = exercisesQuery.data?.find((item) => item._id === exerciseId);
+                    if (!exercise) return null;
+                    const name = formatExerciseName(exercise.name);
+                    const move = (direction: -1 | 1) => {
+                      const next = [...field.value];
+                      const target = index + direction;
+                      if (target < 0 || target >= next.length) return;
+                      [next[index], next[target]] = [next[target], next[index]];
+                      field.onChange(next);
+                    };
+
+                    return (
+                      <li
+                        key={exerciseId}
+                        className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm"
+                      >
+                        <span className="w-6 text-center tabular-nums text-muted-foreground">
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate font-medium">{name}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          disabled={index === 0}
+                          onClick={() => move(-1)}
+                          aria-label={`Move ${name} up`}
+                        >
+                          <ArrowUp aria-hidden="true" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          disabled={index === field.value.length - 1}
+                          onClick={() => move(1)}
+                          aria-label={`Move ${name} down`}
+                        >
+                          <ArrowDown aria-hidden="true" />
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ol>
+              )}
               {exercisesQuery.isPending ? (
                 <PageLoader label="Loading exercises…" />
               ) : (

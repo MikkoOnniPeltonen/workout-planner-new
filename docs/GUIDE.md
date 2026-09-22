@@ -97,16 +97,17 @@ To check the API at any time, open http://localhost:3000/health. `"database":"co
 
 1. **Sign up.** The password hints update as you type, and you're logged in straight away.
 2. **Get a workout.** On **Workouts**:
+   - **Quick start** jumps to a sensible first plan with minimal setup. You can still edit the exercises before saving.
    - **Generate a plan** walks you through the primary focus, secondary focus, finisher and equipment. The muscle group you trained longest ago is marked **Recommended**. On the last step, shuffle, add or remove exercises, then save.
    - **New workout** lets you pick the exercises yourself.
 3. **Train.** Press **Start workout** on a workout card.
    - Each exercise shows **Last time** with your previous sets. A badge such as **+2.5 kg** means you completed every set last time, so the target goes up.
-   - Enter the reps and weight, or the time, and tick the set. The rest timer starts; change it with **−15 s** and **+15 s**, or press **Skip**.
+   - Enter the reps and weight, or the time, and tick the set. The logger shows a suggested target and tells you whether to progress or repeat last time. The rest timer starts; change it with **−15 s** and **+15 s**, or press **Skip**. Your rest preference is remembered.
    - If you refresh or your phone locks, your progress is kept. When you come back, choose **Keep it** or **Discard**.
    - Press **Save session** when you're done. If some sets aren't ticked, you can save only the ticked ones or mark them all as done.
 4. **No plan today?** On **History**, choose **Log freestyle session**. On a phone, use the **Log** tab.
 5. **History** lists your sessions by week. Edit or delete them there.
-6. **Stats** shows sessions, sets, volume and your week streak for the last 4 weeks, 12 weeks or 6 months, plus sets per muscle group and personal records. **Show as table** lists the numbers behind each chart.
+6. **Stats** shows sessions, sets, volume and your week streak for the last 4 weeks, 12 weeks or 6 months, plus sets per muscle group and personal records. **Show as table** lists the numbers behind each chart. Use **Export data** to download your logged history as JSON.
 7. **Exercises** is the searchable exercise library.
 
 ### Install it as an app

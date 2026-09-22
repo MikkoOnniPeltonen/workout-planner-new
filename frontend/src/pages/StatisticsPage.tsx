@@ -1,7 +1,8 @@
 import type { MuscleGroupSets } from '@workout-planner/shared';
-import { ChartColumn } from 'lucide-react';
+import { ChartColumn, Download } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import {
   Area,
   AreaChart,
@@ -33,6 +34,7 @@ import {
 } from '@/lib/format';
 import { countDelta, percentDelta } from '@/lib/stats';
 import { cn } from '@/lib/utils';
+import { downloadSessionExport } from '@/lib/export';
 
 const ranges = [
   { weeks: 4, label: '4 weeks' },
@@ -112,13 +114,32 @@ function DataTable({ columns, rows }: { columns: string[]; rows: (string | numbe
 
 function StatisticsPage() {
   const [weeks, setWeeks] = useState(12);
+  const [isExporting, setIsExporting] = useState(false);
   const statsQuery = useSessionStats(weeks);
   const rangeLabel = ranges.find((range) => range.weeks === weeks)?.label ?? `${weeks} weeks`;
+
+  const exportData = async () => {
+    setIsExporting(true);
+    try {
+      await downloadSessionExport();
+      toast.success('Training history exported');
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const header = (
     <PageHeader
       title="Your progress"
       description="Real numbers from the sessions you have logged."
+      actions={
+        <Button variant="outline" onClick={exportData} disabled={isExporting}>
+          <Download aria-hidden="true" />
+          {isExporting ? 'Exporting…' : 'Export data'}
+        </Button>
+      }
     />
   );
 

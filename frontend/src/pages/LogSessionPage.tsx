@@ -65,6 +65,20 @@ import { cn } from '@/lib/utils';
 const DEFAULT_REST_SECONDS = 90;
 const MIN_REST_SECONDS = 15;
 const MAX_REST_SECONDS = 600;
+const REST_SECONDS_KEY = 'workout-planner:rest-seconds';
+
+function storedRestSeconds() {
+  try {
+    const stored = localStorage.getItem(REST_SECONDS_KEY);
+    if (stored === null) return DEFAULT_REST_SECONDS;
+    const value = Number(stored);
+    return Number.isFinite(value)
+      ? Math.min(MAX_REST_SECONDS, Math.max(MIN_REST_SECONDS, value))
+      : DEFAULT_REST_SECONDS;
+  } catch {
+    return DEFAULT_REST_SECONDS;
+  }
+}
 
 /**
  * Logs a session. Three routes share it:
@@ -168,7 +182,7 @@ function SessionForm({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pendingValues, setPendingValues] = useState<SessionFormValues | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
-  const [restSeconds, setRestSeconds] = useState(DEFAULT_REST_SECONDS);
+  const [restSeconds, setRestSeconds] = useState(storedRestSeconds);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
 
   const { control, register, handleSubmit, getValues, setValue, reset, watch } =
@@ -232,7 +246,15 @@ function SessionForm({
 
   const adjustRest = (seconds: number) => {
     setRestSeconds((current) =>
-      Math.min(MAX_REST_SECONDS, Math.max(MIN_REST_SECONDS, current + seconds)),
+      (() => {
+        const next = Math.min(MAX_REST_SECONDS, Math.max(MIN_REST_SECONDS, current + seconds));
+        try {
+          localStorage.setItem(REST_SECONDS_KEY, String(next));
+        } catch {
+          // Preferences are best-effort; the timer still works for this session.
+        }
+        return next;
+      })(),
     );
     setRestEndsAt((current) =>
       current === null ? null : Math.max(Date.now(), current + seconds * 1000),
@@ -498,6 +520,7 @@ function ExerciseLog({
   const name = exercise ? formatExerciseName(exercise.name) : 'Unknown exercise';
   const targets = progressionTargets(lastSets, metric);
   const increase = describeIncrease(targets, metric);
+  const guidance = increase ?? (lastSets && lastSets.length > 0 ? 'Repeat last time' : undefined);
 
   const addSet = () => {
     // New sets copy the previous row's numbers, since sets are usually repeated.
@@ -520,10 +543,20 @@ function ExerciseLog({
               ? `Last time: ${formatSets(lastSets, metric)}`
               : 'No previous sets logged'}
           </p>
-          {increase && (
-            <p className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-primary">
-              <TrendingUp className="size-3.5" aria-hidden="true" />
-              {increase}
+          {guidance && (
+            <p
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium',
+                increase ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground',
+              )}
+            >
+              {increase && <TrendingUp className="size-3.5" aria-hidden="true" />}
+              {guidance}
+            </p>
+          )}
+          {targets.length > 0 && (
+            <p className="text-xs text-muted-foreground">
+              Suggested target: <span className="font-medium text-foreground">{formatSets(targets, metric)}</span>
             </p>
           )}
         </div>

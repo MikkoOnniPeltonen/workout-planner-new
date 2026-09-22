@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Check, Plus, Shuffle, X } from 'lucide-react';
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ErrorState, PageLoader } from '@/components/feedback';
 import { Button } from '@/components/ui/button';
@@ -60,6 +60,8 @@ interface PlanState {
 
 export default function WorkoutWizard() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const quickStart = searchParams.get('quick') === '1';
   const exercisesQuery = useExercises();
   const muscleGroupsQuery = useMuscleGroups();
   // Training history makes the wizard adaptive; without it the wizard still works.
@@ -74,12 +76,16 @@ export default function WorkoutWizard() {
   const [plan, setPlan] = useState<PlanState | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const advanceTimer = useRef<number | undefined>(undefined);
+  const quickStartApplied = useRef(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm({ resolver: zodResolver(nameSchema), defaultValues: { name: '' } });
+  } = useForm({
+    resolver: zodResolver(nameSchema),
+    defaultValues: { name: quickStart ? 'Quick start' : '' },
+  });
 
   const steps = useMemo(
     () =>
@@ -121,6 +127,16 @@ export default function WorkoutWizard() {
       : undefined;
 
   useEffect(() => () => window.clearTimeout(advanceTimer.current), []);
+
+  // A first workout should be available with one decision. Users can still edit every choice
+  // after the plan is generated, but they do not need to understand the full wizard first.
+  useEffect(() => {
+    if (!quickStart || quickStartApplied.current || !exercises || !muscleGroupsQuery.data) return;
+    quickStartApplied.current = true;
+    const primary = recommendedGroup ?? steps[0]?.options[0];
+    setSelections({ ...emptySelections, primary: primary ? [primary] : [] });
+    setStepIndex(reviewStepIndex);
+  }, [quickStart, exercises, muscleGroupsQuery.data, recommendedGroup, steps, reviewStepIndex]);
 
   // Build a plan when the review step is reached, and rebuild it when its inputs changed.
   useEffect(() => {
