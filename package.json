@@ -23,7 +23,7 @@
     "audit:security": "pnpm audit --audit-level=low"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.13",
+    "@biomejs/biome": "2.6.2",
     "@playwright/test": "^1.64.1"
   }
 }
