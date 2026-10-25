@@ -12,6 +12,15 @@ class AuthService {
     return response.data;
   };
 
+  logout = async () => {
+    await api.post('/auth/logout');
+  };
+
+  demo = async () => {
+    const response = await api.post<AuthResponse>('/auth/demo');
+    return response.data;
+  };
+
   verify = async () => {
     const response = await api.get<AuthUser>('/auth/verify');
     return response.data;

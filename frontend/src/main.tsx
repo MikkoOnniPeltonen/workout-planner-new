@@ -7,7 +7,8 @@ import App from './App.tsx';
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { retry: 1 },
+    queries: { retry: 1, networkMode: 'always' },
+    mutations: { networkMode: 'always', retry: false },
   },
 });
 

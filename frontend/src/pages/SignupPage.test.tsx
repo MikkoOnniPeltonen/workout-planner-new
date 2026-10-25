@@ -6,7 +6,7 @@ import { renderWithProviders } from '@/test/render';
 import SignupPage from './SignupPage';
 
 vi.mock('@/services/auth.service', () => ({
-  default: { signup: vi.fn(), login: vi.fn(), verify: vi.fn() },
+  default: { signup: vi.fn(), login: vi.fn(), verify: vi.fn(async () => null) },
 }));
 
 function ruleItem(label: string) {
@@ -23,7 +23,7 @@ describe('SignupPage', () => {
     expect(ruleItem('One uppercase letter')).toHaveAttribute('data-met', 'false');
     expect(ruleItem('One number')).toHaveAttribute('data-met', 'false');
 
-    await user.type(password, 'DEF1');
+    await user.type(password, 'DEFGHIJKL1');
     for (const rule of passwordRules) {
       expect(ruleItem(rule.label)).toHaveAttribute('data-met', 'true');
     }
@@ -31,21 +31,21 @@ describe('SignupPage', () => {
 
   it('logs the user in straight after signing up', async () => {
     vi.mocked(authService.signup).mockResolvedValue({
-      authToken: 'new-token',
       user: { _id: 'user-1', name: 'Alice', email: 'alice@example.com' },
     });
     const { user } = renderWithProviders(<SignupPage />);
 
     await user.type(screen.getByLabelText('Name'), 'Alice');
     await user.type(screen.getByLabelText('Email'), 'Alice@Example.com');
-    await user.type(screen.getByLabelText('Password'), 'Secret123');
+    await user.type(screen.getByLabelText('Password'), 'Secret1234567');
     await user.click(screen.getByRole('button', { name: 'Create account' }));
 
-    await vi.waitFor(() => expect(localStorage.getItem('authToken')).toBe('new-token'));
+    await vi.waitFor(() => expect(authService.signup).toHaveBeenCalledOnce());
+    expect(localStorage.getItem('authToken')).toBeNull();
     expect(authService.signup).toHaveBeenCalledWith({
       name: 'Alice',
       email: 'alice@example.com',
-      password: 'Secret123',
+      password: 'Secret1234567',
     });
   });
 });

@@ -1,6 +1,6 @@
 import express from 'express';
 import { workoutController } from '../controllers/workout.controller.ts';
-import { isAuthenticated } from '../middleware/jwt.middleware.ts';
+import { isAuthenticated } from '../middleware/session.middleware.ts';
 
 const router = express.Router();
 

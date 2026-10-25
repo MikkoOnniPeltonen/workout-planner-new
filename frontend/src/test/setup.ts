@@ -1,6 +1,20 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup } from '@testing-library/react';
-import { afterEach } from 'vitest';
+import { afterEach, vi } from 'vitest';
+
+vi.mock('@/services/auth.service', () => ({
+  default: {
+    verify: vi.fn(async () => ({
+      _id: 'a'.repeat(24),
+      name: 'Test athlete',
+      email: 'test@example.com',
+    })),
+    login: vi.fn(),
+    signup: vi.fn(),
+    logout: vi.fn(),
+    demo: vi.fn(),
+  },
+}));
 
 afterEach(() => {
   cleanup();

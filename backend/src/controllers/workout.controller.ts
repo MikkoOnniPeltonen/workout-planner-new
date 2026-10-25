@@ -1,6 +1,6 @@
 import { workoutInputSchema } from '@workout-planner/shared';
 import type { Request, Response } from 'express';
-import { getAuth } from '../middleware/jwt.middleware.ts';
+import { getAuth } from '../middleware/session.middleware.ts';
 import { workoutService } from '../services/workout.service.ts';
 import { HttpError } from '../utils/http-error.ts';
 import { idParamsSchema, validate } from '../utils/validate.ts';

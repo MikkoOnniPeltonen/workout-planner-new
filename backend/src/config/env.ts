@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  DEMO_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((value) => value === 'true'),
   PORT: z.coerce.number().int().positive().default(3000),
   MONGODB_URI: z.string().min(1).default('mongodb://localhost:27017/workout-planner'),
   TOKEN_SECRET: z

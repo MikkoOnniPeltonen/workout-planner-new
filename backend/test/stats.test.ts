@@ -156,12 +156,12 @@ describe('statsService', () => {
   });
 
   it('is served over the API with a validated time zone', async () => {
-    const { authToken } = await createUserAndToken();
+    const { sessionCookie } = await createUserAndToken();
 
     expect((await request(app).get('/sessions/stats')).status).toBe(401);
-    expect((await authed(authToken).get('/sessions/stats?tz=Mars/Olympus')).status).toBe(400);
+    expect((await authed(sessionCookie).get('/sessions/stats?tz=Mars/Olympus')).status).toBe(400);
 
-    const response = await authed(authToken).get('/sessions/stats?tz=Europe/Helsinki&weeks=6');
+    const response = await authed(sessionCookie).get('/sessions/stats?tz=Europe/Helsinki&weeks=6');
     expect(response.status).toBe(200);
     expect(response.body.weekly).toHaveLength(6);
     expect(response.body.currentWeekStreak).toBe(0);

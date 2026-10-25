@@ -3,7 +3,7 @@ import { z } from 'zod';
 // Single source of truth for password rules: the backend validates with them and the
 // signup form renders them as live hints.
 export const passwordRules = [
-  { label: 'At least 6 characters', test: (value: string) => value.length >= 6 },
+  { label: 'At least 12 characters', test: (value: string) => value.length >= 12 },
   { label: 'One lowercase letter', test: (value: string) => /[a-z]/.test(value) },
   { label: 'One uppercase letter', test: (value: string) => /[A-Z]/.test(value) },
   { label: 'One number', test: (value: string) => /\d/.test(value) },
@@ -11,7 +11,12 @@ export const passwordRules = [
 
 export const passwordSchema = passwordRules.reduce(
   (schema, rule) => schema.refine(rule.test, `Password needs ${rule.label.toLowerCase()}.`),
-  z.string().max(128, 'Password must be at most 128 characters.'),
+  z
+    .string()
+    .refine(
+      (value) => new TextEncoder().encode(value).length <= 72,
+      'Password must be at most 72 UTF-8 bytes.',
+    ),
 );
 
 const emailSchema = z.string().trim().toLowerCase().pipe(z.email('Provide a valid email address.'));

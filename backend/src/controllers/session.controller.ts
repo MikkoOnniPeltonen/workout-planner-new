@@ -1,12 +1,13 @@
 import {
   objectIdSchema,
   SESSION_MAX_ENTRIES,
+  sessionCursorSchema,
   sessionInputSchema,
   sessionUpdateSchema,
 } from '@workout-planner/shared';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { getAuth } from '../middleware/jwt.middleware.ts';
+import { getAuth } from '../middleware/session.middleware.ts';
 import { sessionService } from '../services/session.service.ts';
 import { statsService } from '../services/stats.service.ts';
 import { HttpError } from '../utils/http-error.ts';
@@ -15,7 +16,7 @@ import { isValidTimeZone } from '../utils/weeks.ts';
 
 const listQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
-  before: z.iso.datetime({ offset: true }).optional(),
+  before: sessionCursorSchema.optional(),
 });
 
 const lastPerformanceQuerySchema = z.object({
@@ -40,6 +41,10 @@ class SessionController {
     const { _id: userId } = getAuth(req);
     const options = validate(listQuerySchema, req.query);
     res.json(await sessionService.listSessions(userId, options));
+  }
+
+  async getRecentExercises(req: Request, res: Response) {
+    res.json(await sessionService.recentExercises(getAuth(req)._id));
   }
 
   async getStats(req: Request, res: Response) {
@@ -69,6 +74,8 @@ class SessionController {
   async createSession(req: Request, res: Response) {
     const { _id: userId } = getAuth(req);
     const input = validate(sessionInputSchema, req.body);
+    if (input.clientRequestId && req.get('X-Session-Owner') !== userId)
+      throw new HttpError(409, 'Sign in to the account that created this pending save.');
     res.status(201).json(await sessionService.createSession(userId, input));
   }
 

@@ -16,7 +16,7 @@ vi.mock('@/services/workouts.service', () => ({
   default: { createWorkout: vi.fn() },
 }));
 vi.mock('@/services/sessions.service', () => ({
-  default: { getStats: vi.fn(), getSessions: vi.fn() },
+  default: { getStats: vi.fn(), getSessions: vi.fn(), getRecentExercises: vi.fn() },
 }));
 
 function plannedItems() {
@@ -40,6 +40,7 @@ describe('WorkoutWizard', () => {
     vi.mocked(exercisesService.getAllExercises).mockResolvedValue(exercises);
     vi.mocked(exercisesService.getMuscleGroups).mockResolvedValue(muscleGroups);
     vi.mocked(sessionsService.getSessions).mockResolvedValue([]);
+    vi.mocked(sessionsService.getRecentExercises).mockResolvedValue([]);
     vi.mocked(sessionsService.getStats).mockResolvedValue(
       sessionStats({
         totalSessions: 2,

@@ -6,18 +6,23 @@ import { seedDatabase } from '../src/scripts/seed-data.ts';
 
 export const app = createApp();
 
+export interface TestAuth extends AuthResponse {
+  sessionCookie: string;
+}
+
 let userCount = 0;
 
-export async function createUserAndToken(name = 'Test User'): Promise<AuthResponse> {
+export async function createUserAndToken(name = 'Test User'): Promise<TestAuth> {
   userCount += 1;
   const response = await request(app)
     .post('/auth/signup')
-    .send({ name, email: `user${userCount}@example.com`, password: 'Secret123' });
+    .set('X-CSRF-Protection', '1')
+    .send({ name, email: `user${userCount}@example.com`, password: 'Secret1234567' });
 
   if (response.status !== 201) {
     throw new Error(`Signup failed with ${response.status}: ${JSON.stringify(response.body)}`);
   }
-  return response.body;
+  return { ...response.body, sessionCookie: response.headers['set-cookie'][0].split(';')[0] };
 }
 
 export async function seedExerciseIds(count = 3): Promise<string[]> {
@@ -26,15 +31,15 @@ export async function seedExerciseIds(count = 3): Promise<string[]> {
   return exercises.map((exercise) => String(exercise._id));
 }
 
-/** Supertest requests carrying a bearer token. */
-export function authed(token: string) {
-  const authorization = `Bearer ${token}`;
+/** Supertest requests carrying the session cookie and CSRF header. */
+export function authed(cookie: string) {
   return {
-    get: (url: string) => request(app).get(url).set('Authorization', authorization),
+    get: (url: string) => request(app).get(url).set('Cookie', cookie).set('X-CSRF-Protection', '1'),
     post: (url: string, body: object) =>
-      request(app).post(url).set('Authorization', authorization).send(body),
+      request(app).post(url).set('Cookie', cookie).set('X-CSRF-Protection', '1').send(body),
     put: (url: string, body: object) =>
-      request(app).put(url).set('Authorization', authorization).send(body),
-    delete: (url: string) => request(app).delete(url).set('Authorization', authorization),
+      request(app).put(url).set('Cookie', cookie).set('X-CSRF-Protection', '1').send(body),
+    delete: (url: string) =>
+      request(app).delete(url).set('Cookie', cookie).set('X-CSRF-Protection', '1'),
   };
 }

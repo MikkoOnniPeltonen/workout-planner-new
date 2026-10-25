@@ -1,82 +1,81 @@
-import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { app } from './helpers.ts';
+import { AuthSession } from '../src/models/AuthSession.model.ts';
+import { app, authed, createUserAndToken } from './helpers.ts';
 
-const credentials = { name: 'Alice', email: 'Alice@Example.com', password: 'Secret123' };
+const credentials = { name: 'Alice', email: 'Alice@Example.com', password: 'Secret12345674567' };
+const signup = () =>
+  request(app).post('/auth/signup').set('X-CSRF-Protection', '1').send(credentials);
 
-describe('auth API', () => {
-  it('signs up, returns a token, and never exposes the password', async () => {
-    const signup = await request(app).post('/auth/signup').send(credentials);
-
-    expect(signup.status).toBe(201);
-    expect(signup.body.user).toEqual({
-      _id: expect.any(String),
-      name: 'Alice',
-      email: 'alice@example.com',
+describe('cookie authentication', () => {
+  it('issues HttpOnly SameSite cookies without exposing credentials to JavaScript', async () => {
+    const response = await signup();
+    expect(response.status).toBe(201);
+    expect(response.body).toEqual({
+      user: { _id: expect.any(String), name: 'Alice', email: 'alice@example.com' },
     });
-
-    const verify = await request(app)
-      .get('/auth/verify')
-      .set('Authorization', `Bearer ${signup.body.authToken}`);
-    expect(verify.status).toBe(200);
-    expect(verify.body).toEqual(signup.body.user);
+    const cookie = response.headers['set-cookie'][0];
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).toContain('SameSite=Strict');
+    const verify = await request(app).get('/auth/verify').set('Cookie', cookie.split(';')[0]);
+    expect(verify.body).toEqual(response.body.user);
+    const stored = await AuthSession.findOne().select('+tokenHash');
+    expect(stored?.tokenHash).not.toBe(cookie.split(';')[0].split('=')[1]);
   });
-
-  it('rejects a duplicate email regardless of casing', async () => {
-    await request(app).post('/auth/signup').send(credentials);
-    const duplicate = await request(app)
-      .post('/auth/signup')
-      .send({ ...credentials, email: 'ALICE@example.com' });
-
-    expect(duplicate.status).toBe(409);
+  it('revokes the session on logout, including replay of the old cookie', async () => {
+    const user = await createUserAndToken();
+    expect((await authed(user.sessionCookie).post('/auth/logout', {})).status).toBe(204);
+    expect((await authed(user.sessionCookie).get('/auth/verify')).status).toBe(401);
   });
-
-  it('explains which password rule is not met', async () => {
+  it('rejects expired, malformed and missing sessions', async () => {
+    const user = await createUserAndToken();
+    await AuthSession.updateMany({}, { expiresAt: new Date(0) });
+    expect((await authed(user.sessionCookie).get('/auth/verify')).status).toBe(401);
+    expect((await authed('workout-session=bad').get('/auth/verify')).status).toBe(401);
+    expect((await request(app).get('/auth/verify')).status).toBe(401);
+  });
+  it('rejects cross-origin writes and simple form submissions, including login', async () => {
+    expect((await request(app).post('/auth/signup').send(credentials)).status).toBe(403);
+    expect(
+      (
+        await request(app)
+          .post('/auth/signup')
+          .set('X-CSRF-Protection', '1')
+          .set('Origin', 'https://evil.example')
+          .send(credentials)
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(app)
+          .post('/auth/signup')
+          .set('X-CSRF-Protection', '1')
+          .set('Origin', 'http://localhost:5173')
+          .send(credentials)
+      ).status,
+    ).toBe(201);
+  });
+  it('normalizes emails, rejects duplicates, and logs in', async () => {
+    await signup();
+    expect((await signup()).status).toBe(409);
     const response = await request(app)
-      .post('/auth/signup')
-      .send({ ...credentials, password: 'secret123' });
-
-    expect(response.status).toBe(400);
-    expect(response.body.message).toBe('Password needs one uppercase letter.');
-  });
-
-  it('logs in with any email casing', async () => {
-    await request(app).post('/auth/signup').send(credentials);
-    const login = await request(app)
       .post('/auth/login')
-      .send({ email: 'alice@EXAMPLE.com', password: credentials.password });
-
-    expect(login.status).toBe(200);
-    expect(login.body.authToken).toEqual(expect.any(String));
-    expect(login.body.user.email).toBe('alice@example.com');
+      .set('X-CSRF-Protection', '1')
+      .send({ email: 'ALICE@example.com', password: credentials.password });
+    expect(response.status).toBe(200);
+    expect(response.body.user.email).toBe('alice@example.com');
   });
-
-  it('gives the same answer for an unknown email and a wrong password', async () => {
-    await request(app).post('/auth/signup').send(credentials);
-    const wrongPassword = await request(app)
-      .post('/auth/login')
-      .send({ email: credentials.email, password: 'Wrong1234' });
-    const unknownEmail = await request(app)
-      .post('/auth/login')
-      .send({ email: 'nobody@example.com', password: credentials.password });
-
-    expect(wrongPassword.status).toBe(401);
-    expect(unknownEmail.status).toBe(401);
-    expect(wrongPassword.body).toEqual(unknownEmail.body);
-  });
-
-  it('rejects missing, malformed, and foreign tokens', async () => {
-    const foreignToken = jwt.sign(
-      { _id: 'x', email: 'x@example.com', name: 'X' },
-      'a-different-secret-that-is-long-enough',
-    );
-    const responses = await Promise.all([
-      request(app).get('/auth/verify'),
-      request(app).get('/auth/verify').set('Authorization', 'Bearer not-a-token'),
-      request(app).get('/auth/verify').set('Authorization', `Bearer ${foreignToken}`),
-    ]);
-
-    expect(responses.map((response) => response.status)).toEqual([401, 401, 401]);
+  it('returns the same error for unknown email and wrong password', async () => {
+    await signup();
+    const attempt = (email: string) =>
+      request(app)
+        .post('/auth/login')
+        .set('X-CSRF-Protection', '1')
+        .send({ email, password: 'Wrong1234567' });
+    const wrong = await attempt(credentials.email);
+    const unknown = await attempt('nobody@example.com');
+    expect(wrong.status).toBe(401);
+    expect(unknown.status).toBe(401);
+    expect(wrong.body).toEqual(unknown.body);
   });
 });

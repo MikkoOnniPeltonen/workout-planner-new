@@ -6,6 +6,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query';
 import type { SessionInput, SessionUpdateInput, WorkoutInput } from '@workout-planner/shared';
+import { sessionCursor } from '@workout-planner/shared';
 import exercisesService from '@/services/exercises.service';
 import sessionsService from '@/services/sessions.service';
 import workoutsService from '@/services/workouts.service';
@@ -88,6 +89,13 @@ export function useDeleteWorkout() {
   });
 }
 
+export function useRecentExercises() {
+  return useQuery({
+    queryKey: ['sessions', 'recent-exercises'],
+    queryFn: sessionsService.getRecentExercises,
+  });
+}
+
 export function useSessionHistory() {
   return useInfiniteQuery({
     queryKey: queryKeys.sessionHistory,
@@ -95,7 +103,9 @@ export function useSessionHistory() {
       sessionsService.getSessions({ limit: HISTORY_PAGE_SIZE, before: pageParam }),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) =>
-      lastPage.length === HISTORY_PAGE_SIZE ? lastPage.at(-1)?.performedAt : undefined,
+      lastPage.length === HISTORY_PAGE_SIZE
+        ? sessionCursor(lastPage[lastPage.length - 1])
+        : undefined,
   });
 }
 

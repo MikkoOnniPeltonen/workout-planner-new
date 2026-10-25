@@ -15,7 +15,12 @@ vi.mock('@/services/workouts.service', () => ({
   default: { getWorkoutById: vi.fn() },
 }));
 vi.mock('@/services/sessions.service', () => ({
-  default: { getLastPerformance: vi.fn(), createSession: vi.fn(), getSession: vi.fn() },
+  default: {
+    getLastPerformance: vi.fn(),
+    createSession: vi.fn(),
+    getSession: vi.fn(),
+    updateSession: vi.fn(),
+  },
 }));
 
 function fixture(name: string) {
@@ -146,5 +151,52 @@ describe('LogSessionPage', () => {
         { exercise: plank._id, sets: [{ durationSec: 45, completed: true }] },
       ],
     });
+  });
+  it('preserves the original edit revision across reloads and uses the latest revision only after discarding the draft', async () => {
+    const original: WorkoutSession = {
+      _id: objectId(),
+      belongsTo: workout.belongsTo,
+      workout: workout._id,
+      workoutName: workout.name,
+      performedAt: new Date().toISOString(),
+      entries: [{ exercise: squat, sets: lastSquat.sets }],
+      createdAt: '2026-09-10T17:00:00.000Z',
+      updatedAt: '2026-09-10T17:00:00.000Z',
+    };
+    vi.mocked(sessionsService.getSession).mockResolvedValue(original);
+    const renderEditor = () =>
+      renderWithProviders(<LogSessionPage />, {
+        route: `/sessions/${original._id}/edit`,
+        path: '/sessions/:sessionId/edit',
+        extraRoutes: { '/history': <p>History page</p> },
+      });
+    const first = renderEditor();
+    const reps = await screen.findByLabelText('Reps for set 1 of Squat');
+    await first.user.clear(reps);
+    await first.user.type(reps, '10');
+    cleanup();
+    const latest = { ...original, updatedAt: '2026-09-11T17:00:00.000Z' };
+    vi.mocked(sessionsService.getSession).mockResolvedValue(latest);
+    vi.mocked(sessionsService.updateSession)
+      .mockRejectedValueOnce({
+        isAxiosError: true,
+        response: { status: 409, data: { message: 'This session changed on another device.' } },
+      })
+      .mockResolvedValueOnce(latest);
+    const restored = renderEditor();
+    await screen.findByText('Restored your unsaved session.');
+    await restored.user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await screen.findByText('This session changed on another device.');
+    expect(sessionsService.updateSession).toHaveBeenLastCalledWith(
+      original._id,
+      expect.objectContaining({ expectedUpdatedAt: original.updatedAt }),
+    );
+    await restored.user.click(screen.getByRole('button', { name: /^Discard$/ }));
+    await restored.user.click(screen.getByRole('button', { name: 'Save changes' }));
+    await screen.findByText('History page');
+    expect(sessionsService.updateSession).toHaveBeenLastCalledWith(
+      original._id,
+      expect.objectContaining({ expectedUpdatedAt: latest.updatedAt }),
+    );
   });
 });

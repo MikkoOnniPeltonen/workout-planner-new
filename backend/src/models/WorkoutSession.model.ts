@@ -24,6 +24,9 @@ const entrySchema = new Schema(
 
 const workoutSessionSchema = new Schema(
   {
+    expiresAt: { type: Date, expires: 0 },
+    clientRequestId: { type: String },
+    requestHash: { type: String, select: false },
     belongsTo: {
       type: Schema.Types.ObjectId,
       ref: 'User',
@@ -58,10 +61,20 @@ const workoutSessionSchema = new Schema(
   },
   {
     timestamps: true,
+    toJSON: {
+      transform(_doc, result) {
+        delete result.requestHash;
+        return result;
+      },
+    },
   },
 );
 
-workoutSessionSchema.index({ belongsTo: 1, performedAt: -1 });
+workoutSessionSchema.index({ belongsTo: 1, performedAt: -1, _id: -1 });
+workoutSessionSchema.index(
+  { belongsTo: 1, clientRequestId: 1 },
+  { unique: true, partialFilterExpression: { clientRequestId: { $type: 'string' } } },
+);
 
 export type WorkoutSessionType = InferSchemaType<typeof workoutSessionSchema>;
 

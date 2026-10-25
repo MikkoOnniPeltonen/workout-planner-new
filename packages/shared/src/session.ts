@@ -48,13 +48,17 @@ const sessionFields = {
 export const sessionInputSchema = z.strictObject({
   ...sessionFields,
   /** The workout this session followed; omit for a freestyle session. */
+  clientRequestId: z.uuid().optional(),
   workout: objectIdSchema.optional(),
   /** Name for a freestyle session. Ignored when `workout` is set. */
   workoutName: z.string().trim().min(1).max(60).optional(),
 });
 
 /** Editing a session keeps the workout it was logged against. */
-export const sessionUpdateSchema = z.strictObject(sessionFields);
+export const sessionUpdateSchema = z.strictObject({
+  ...sessionFields,
+  expectedUpdatedAt: z.iso.datetime().optional(),
+});
 
 export type SessionInput = z.infer<typeof sessionInputSchema>;
 export type SessionUpdateInput = z.infer<typeof sessionUpdateSchema>;

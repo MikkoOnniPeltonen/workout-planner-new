@@ -3,8 +3,14 @@ import bcrypt from 'bcryptjs';
 import express from 'express';
 import { rateLimit } from 'express-rate-limit';
 import { env } from '../config/env.ts';
-import { getAuth, isAuthenticated, signToken } from '../middleware/jwt.middleware.ts';
+import {
+  getAuth,
+  isAuthenticated,
+  issueSession,
+  revokeSession,
+} from '../middleware/session.middleware.ts';
 import { User } from '../models/User.model.ts';
+import { createDemo } from '../services/demo.service.ts';
 import { HttpError } from '../utils/http-error.ts';
 import { validate } from '../utils/validate.ts';
 
@@ -38,7 +44,8 @@ router.post('/signup', authRateLimit, async (req, res) => {
   const hashedPassword = await bcrypt.hash(password, saltRounds);
   const user = toAuthUser(await User.create({ email, name, password: hashedPassword }));
 
-  res.status(201).json({ user, authToken: signToken(user) });
+  await issueSession(res, user);
+  res.status(201).json({ user });
 });
 
 // POST /auth/login
@@ -53,12 +60,34 @@ router.post('/login', authRateLimit, async (req, res) => {
   }
 
   const user = toAuthUser(foundUser);
-  res.json({ user, authToken: signToken(user) });
+  await issueSession(res, user);
+  res.json({ user });
 });
 
 // GET /auth/verify
 router.get('/verify', isAuthenticated, (req, res) => {
   res.json(getAuth(req));
+});
+
+const demoRateLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 5,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  skip: () => env.NODE_ENV === 'test',
+  message: { message: 'Too many demo accounts. Please try again later.' },
+});
+router.post('/demo', demoRateLimit, async (req, res) => {
+  if (!env.DEMO_ENABLED) throw new HttpError(404, 'Demo is disabled.');
+  const user = await createDemo();
+  await revokeSession(req, res);
+  await issueSession(res, user);
+  res.status(201).json({ user });
+});
+
+router.post('/logout', async (req, res) => {
+  await revokeSession(req, res);
+  res.status(204).end();
 });
 
 export default router;

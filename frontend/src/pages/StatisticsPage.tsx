@@ -1,8 +1,8 @@
 import type { MuscleGroupSets } from '@workout-planner/shared';
+import { useReducedMotion } from 'framer-motion';
 import { ChartColumn, Download } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { toast } from 'sonner';
 import {
   Area,
   AreaChart,
@@ -15,6 +15,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import { toast } from 'sonner';
 import { ChartTooltip } from '@/components/charts/ChartTooltip';
 import { chartTheme } from '@/components/charts/chart-theme';
 import { EmptyState, ErrorState, PageLoader } from '@/components/feedback';
@@ -25,6 +26,7 @@ import { Card, CardContent, CardDescription, CardHeader } from '@/components/ui/
 import { FilterChip } from '@/components/ui/filter-chip';
 import { useSessionStats } from '@/hooks/queries';
 import { getErrorMessage } from '@/lib/api';
+import { downloadSessionExport } from '@/lib/export';
 import {
   formatDate,
   formatDaysAgo,
@@ -34,7 +36,6 @@ import {
 } from '@/lib/format';
 import { countDelta, percentDelta } from '@/lib/stats';
 import { cn } from '@/lib/utils';
-import { downloadSessionExport } from '@/lib/export';
 
 const ranges = [
   { weeks: 4, label: '4 weeks' },
@@ -113,6 +114,7 @@ function DataTable({ columns, rows }: { columns: string[]; rows: (string | numbe
 }
 
 function StatisticsPage() {
+  const reducedMotion = useReducedMotion();
   const [weeks, setWeeks] = useState(12);
   const [isExporting, setIsExporting] = useState(false);
   const statsQuery = useSessionStats(weeks);
@@ -299,6 +301,7 @@ function StatisticsPage() {
                     }
                   />
                   <Bar
+                    isAnimationActive={!reducedMotion}
                     dataKey="sessions"
                     fill={chartTheme.series}
                     activeBar={{ fill: chartTheme.seriesActive }}
@@ -356,6 +359,7 @@ function StatisticsPage() {
                     }
                   />
                   <Area
+                    isAnimationActive={!reducedMotion}
                     type="linear"
                     dataKey="volumeKg"
                     stroke={chartTheme.series}
@@ -424,6 +428,7 @@ function StatisticsPage() {
                       }
                     />
                     <Bar
+                      isAnimationActive={!reducedMotion}
                       dataKey="sets"
                       fill={chartTheme.series}
                       activeBar={{ fill: chartTheme.seriesActive }}

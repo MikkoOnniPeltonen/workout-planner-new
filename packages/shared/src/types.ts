@@ -32,7 +32,6 @@ export interface AuthUser {
 }
 
 export interface AuthResponse {
-  authToken: string;
   user: AuthUser;
 }
 

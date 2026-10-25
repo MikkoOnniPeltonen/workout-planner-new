@@ -1,4 +1,5 @@
 import type { WorkoutSession } from '@workout-planner/shared';
+import { sessionCursor } from '@workout-planner/shared';
 import sessionsService from '@/services/sessions.service';
 
 const EXPORT_PAGE_SIZE = 100;
@@ -12,7 +13,7 @@ async function getAllSessions(): Promise<WorkoutSession[]> {
     sessions.push(...page);
     if (page.length < EXPORT_PAGE_SIZE) break;
 
-    const nextBefore = page.at(-1)?.performedAt;
+    const nextBefore = page.length ? sessionCursor(page[page.length - 1]) : undefined;
     if (!nextBefore || nextBefore === before) break;
     before = nextBefore;
   }

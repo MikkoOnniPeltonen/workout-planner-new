@@ -3,11 +3,11 @@
   "private": true,
   "packageManager": "pnpm@12.4.2",
   "engines": {
-    "node": ">=22.18"
+    "node": ">=24.22.1 <25"
   },
   "scripts": {
     "dev": "pnpm --filter backend --filter frontend --parallel run dev",
-    "build": "pnpm --filter frontend run build",
+    "build": "pnpm --filter @workout-planner/shared build && pnpm --filter frontend run build",
     "lint": "biome lint .",
     "format": "biome format --write .",
     "check": "biome check .",
@@ -17,9 +17,13 @@
     "seed": "pnpm --filter backend run seed",
     "check-data": "pnpm --filter backend run check-data",
     "env:create": "node scripts/create-env.mjs",
-    "preview": "pnpm build && pnpm --filter backend --filter frontend --parallel run preview"
+    "preview": "pnpm build && pnpm --filter backend --filter frontend --parallel run preview",
+    "indexes": "pnpm --filter backend run indexes",
+    "test:e2e": "node scripts/build-e2e.mjs && playwright test",
+    "audit:security": "pnpm audit --audit-level=low"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.13"
+    "@biomejs/biome": "2.5.13",
+    "@playwright/test": "^1.64.1"
   }
 }

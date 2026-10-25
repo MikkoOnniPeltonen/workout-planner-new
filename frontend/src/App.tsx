@@ -5,6 +5,7 @@ import RedirectIfAuthenticated from './components/auth/RedirectIfAuthenticated';
 import RequireAuth from './components/auth/RequireAuth';
 import { PageLoader } from './components/feedback';
 import Navbar from './components/Navbar';
+import { SyncStatus } from './components/SyncStatus';
 import { AuthProvider } from './context/auth.context';
 import HomePage from './pages/HomePage';
 
@@ -26,6 +27,7 @@ function App() {
         <MotionConfig reducedMotion="user">
           <div className="min-h-screen bg-background font-sans text-foreground antialiased">
             <Navbar />
+            <SyncStatus />
             <main className="mx-auto w-full max-w-6xl px-4 pt-6 pb-24 sm:pb-12">
               <Suspense fallback={<PageLoader />}>
                 <Routes>

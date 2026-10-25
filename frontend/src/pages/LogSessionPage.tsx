@@ -16,6 +16,7 @@ import {
 } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { EmptyState, ErrorState, PageLoader } from '@/components/feedback';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ import {
 import { getErrorMessage } from '@/lib/api';
 import { clearDraft, loadDraft, saveDraft } from '@/lib/draft';
 import { formatDate, formatExerciseName } from '@/lib/format';
+import { isRetryable, queueSession, removePending } from '@/lib/outbox';
 import { describeIncrease, progressionTargets } from '@/lib/progression';
 import {
   completeSet,
@@ -112,7 +114,7 @@ export default function LogSessionPage() {
   }
 
   const draftScope = workoutId ?? 'freestyle';
-  const draftKey = sessionId ? null : `session-draft:v1:${user?._id ?? 'guest'}:${draftScope}`;
+  const draftKey = `session-draft:v1:${user?._id ?? 'guest'}:${sessionId ?? draftScope}`;
   const lastSetCounts = new Map(
     lastPerformanceQuery.data?.map((row) => [row.exercise, row.sets.length]),
   );
@@ -145,6 +147,7 @@ export default function LogSessionPage() {
       draftKey={draftKey}
       workoutId={workoutId}
       sessionId={sessionId}
+      expectedUpdatedAt={sessionQuery.data?.updatedAt}
     />
   );
 }
@@ -159,6 +162,7 @@ interface SessionFormProps {
   draftKey: string | null;
   workoutId?: string;
   sessionId?: string;
+  expectedUpdatedAt?: string;
 }
 
 function SessionForm({
@@ -169,18 +173,38 @@ function SessionForm({
   draftKey,
   workoutId,
   sessionId,
+  expectedUpdatedAt,
 }: SessionFormProps) {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [requestId] = useState(() => crypto.randomUUID());
   const createSession = useCreateSession();
   const updateSession = useUpdateSession();
 
   const [restoredDraft] = useState(() => {
     const draft = draftKey ? loadDraft(draftKey) : null;
+    if (
+      draft &&
+      typeof draft === 'object' &&
+      'values' in draft &&
+      isSessionFormValues(draft.values)
+    )
+      return draft.values;
     return isSessionFormValues(draft) ? draft : null;
+  });
+  const [editVersion, setEditVersion] = useState(() => {
+    const draft = draftKey ? loadDraft(draftKey) : null;
+    return draft &&
+      typeof draft === 'object' &&
+      'expectedUpdatedAt' in draft &&
+      typeof draft.expectedUpdatedAt === 'string'
+      ? draft.expectedUpdatedAt
+      : expectedUpdatedAt;
   });
   const [showRestoredNotice, setShowRestoredNotice] = useState(restoredDraft !== null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pendingValues, setPendingValues] = useState<SessionFormValues | null>(null);
+  const [discardEdits, setDiscardEdits] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [restSeconds, setRestSeconds] = useState(storedRestSeconds);
   const [restEndsAt, setRestEndsAt] = useState<number | null>(null);
@@ -209,11 +233,14 @@ function SessionForm({
 
   useEffect(() => {
     if (!draftKey) return;
-    const subscription = watch((values) => saveDraft(draftKey, values));
+    const subscription = watch((values) =>
+      saveDraft(draftKey, { values, expectedUpdatedAt: editVersion }),
+    );
     return () => subscription.unsubscribe();
-  }, [watch, draftKey]);
+  }, [watch, draftKey, editVersion]);
 
   const discardDraft = () => {
+    setEditVersion(expectedUpdatedAt);
     reset(freshValues);
     if (draftKey) clearDraft(draftKey);
     setShowRestoredNotice(false);
@@ -282,19 +309,51 @@ function SessionForm({
 
     try {
       if (sessionId) {
-        const parsed = sessionUpdateSchema.safeParse(payload);
+        const parsed = sessionUpdateSchema.safeParse({
+          ...payload,
+          expectedUpdatedAt: editVersion,
+        });
         if (!parsed.success) {
           setFormError(parsed.error.issues[0]?.message ?? 'Check the session details.');
           return;
         }
         await updateSession.mutateAsync({ id: sessionId, input: parsed.data });
       } else {
-        const parsed = sessionInputSchema.safeParse({ ...payload, workout: workoutId });
+        const parsed = sessionInputSchema.safeParse({
+          ...payload,
+          workout: workoutId,
+          clientRequestId: requestId,
+        });
         if (!parsed.success) {
           setFormError(parsed.error.issues[0]?.message ?? 'Check the session details.');
           return;
         }
-        await createSession.mutateAsync(parsed.data);
+        if (!user) {
+          setFormError('Sign in before saving a session. Your draft is still on this device.');
+          return;
+        }
+        try {
+          queueSession(user._id, parsed.data);
+        } catch {
+          setFormError(
+            'Device storage is unavailable or full. Keep this page open and free some storage before saving.',
+          );
+          return;
+        }
+        if (draftKey) clearDraft(draftKey);
+        try {
+          await createSession.mutateAsync(parsed.data);
+          removePending(user._id, requestId);
+        } catch (error) {
+          if (draftKey) clearDraft(draftKey);
+          toast.info(
+            isRetryable(error)
+              ? 'Saved on this device. We’ll sync when you reconnect and sign in.'
+              : 'Saved on this device. Check pending saves for details.',
+          );
+          navigate('/history');
+          return;
+        }
       }
     } catch (error) {
       setFormError(getErrorMessage(error));
@@ -401,7 +460,29 @@ function SessionForm({
         </>
       )}
 
-      {formError && <FormError message={formError} />}
+      {formError && (
+        <div className="space-y-3">
+          <FormError message={formError} />
+          {sessionId && (
+            <Button type="button" variant="outline" onClick={() => setDiscardEdits(true)}>
+              Discard edits and reload
+            </Button>
+          )}
+        </div>
+      )}
+      <ConfirmDialog
+        open={discardEdits}
+        onOpenChange={setDiscardEdits}
+        title="Discard these edits?"
+        description="Your local edits will be removed and the latest saved session will load. Copy any changes you want to keep before continuing."
+        confirmLabel="Discard and reload"
+        pendingLabel="Reloading…"
+        pending={false}
+        onConfirm={() => {
+          if (draftKey) clearDraft(draftKey);
+          window.location.reload();
+        }}
+      />
 
       {restEndsAt !== null && (
         <div className="pointer-events-none fixed inset-x-0 bottom-[calc(7.5rem+env(safe-area-inset-bottom))] z-30 flex justify-center px-4 sm:bottom-20">
@@ -556,7 +637,8 @@ function ExerciseLog({
           )}
           {targets.length > 0 && (
             <p className="text-xs text-muted-foreground">
-              Suggested target: <span className="font-medium text-foreground">{formatSets(targets, metric)}</span>
+              Suggested target:{' '}
+              <span className="font-medium text-foreground">{formatSets(targets, metric)}</span>
             </p>
           )}
         </div>

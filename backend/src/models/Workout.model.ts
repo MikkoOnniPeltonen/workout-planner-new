@@ -2,6 +2,7 @@ import { type InferSchemaType, model, Schema } from 'mongoose';
 
 const workoutSchema = new Schema(
   {
+    expiresAt: { type: Date, expires: 0 },
     name: {
       type: String,
       required: [true, 'Name is required.'],

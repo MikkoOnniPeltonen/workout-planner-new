@@ -25,7 +25,7 @@ import {
   useCreateWorkout,
   useExercises,
   useMuscleGroups,
-  useSessionHistory,
+  useRecentExercises,
   useSessionStats,
 } from '@/hooks/queries';
 import { getErrorMessage } from '@/lib/api';
@@ -43,9 +43,6 @@ import {
   withAvailableGroups,
 } from '@/lib/plan';
 import { cn } from '@/lib/utils';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-const RECENT_DAYS = 7;
 
 const nameSchema = workoutInputSchema.pick({ name: true });
 
@@ -66,7 +63,7 @@ export default function WorkoutWizard() {
   const muscleGroupsQuery = useMuscleGroups();
   // Training history makes the wizard adaptive; without it the wizard still works.
   const statsQuery = useSessionStats();
-  const historyQuery = useSessionHistory();
+  const recentExercisesQuery = useRecentExercises();
   const createWorkout = useCreateWorkout();
 
   const [stepIndex, setStepIndex] = useState(0);
@@ -103,15 +100,10 @@ export default function WorkoutWizard() {
     () => filterByEquipment(exercises ?? [], equipment),
     [exercises, equipment],
   );
-  const recentExerciseIds = useMemo(() => {
-    const cutoff = Date.now() - RECENT_DAYS * DAY_MS;
-    const recentSessions = (historyQuery.data?.pages[0] ?? []).filter(
-      (session) => Date.parse(session.performedAt) >= cutoff,
-    );
-    return new Set(
-      recentSessions.flatMap((session) => session.entries.map((entry) => entry.exercise._id)),
-    );
-  }, [historyQuery.data]);
+  const recentExerciseIds = useMemo(
+    () => new Set(recentExercisesQuery.data ?? []),
+    [recentExercisesQuery.data],
+  );
 
   const equipmentStepIndex = steps.length;
   const reviewStepIndex = steps.length + 1;

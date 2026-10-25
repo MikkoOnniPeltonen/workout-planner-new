@@ -6,6 +6,7 @@ import type {
   WorkoutSession,
 } from '@workout-planner/shared';
 import { api } from '@/lib/api';
+import { currentOwner } from '@/lib/offline-cache';
 
 class SessionsService {
   getSessions = async (params: { limit?: number; before?: string } = {}) => {
@@ -18,8 +19,10 @@ class SessionsService {
     return response.data;
   };
 
-  createSession = async (input: SessionInput) => {
-    const response = await api.post<WorkoutSession>('/sessions', input);
+  createSession = async (input: SessionInput, owner = currentOwner() ?? undefined) => {
+    const response = await api.post<WorkoutSession>('/sessions', input, {
+      headers: { 'X-Session-Owner': owner },
+    });
     return response.data;
   };
 
@@ -36,6 +39,11 @@ class SessionsService {
     const response = await api.get<LastPerformance[]>('/sessions/last-performance', {
       params: { exercises: exerciseIds.join(',') },
     });
+    return response.data;
+  };
+
+  getRecentExercises = async () => {
+    const response = await api.get<string[]>('/sessions/recent-exercises');
     return response.data;
   };
 

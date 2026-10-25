@@ -40,6 +40,8 @@ export default defineConfig({
       },
     }),
   ],
+  server: { host: 'localhost', proxy: { '/api': 'http://localhost:3000' } },
+  preview: { host: 'localhost' },
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),

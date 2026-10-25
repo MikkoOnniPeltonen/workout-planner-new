@@ -15,6 +15,7 @@ export async function connectDatabase(uri: string = env.MONGODB_URI) {
     ...(dbName ? { dbName } : {}),
     // Give up after 10 seconds instead of 30 when the database can't be reached.
     serverSelectionTimeoutMS: 10_000,
+    autoIndex: env.NODE_ENV !== 'production',
   });
   const { name, host } = mongoose.connection;
   console.log(`Connected to MongoDB database "${name}" on ${host}`);

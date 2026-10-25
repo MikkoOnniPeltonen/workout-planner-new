@@ -1,4 +1,5 @@
 import type { WorkoutInput } from '@workout-planner/shared';
+import { User } from '../models/User.model.ts';
 import { Workout } from '../models/Workout.model.ts';
 import { HttpError } from '../utils/http-error.ts';
 import { isDuplicateKeyError } from '../utils/mongo-errors.ts';
@@ -26,6 +27,7 @@ class WorkoutService {
     await exerciseService.assertExercisesExist(input.exercises);
     try {
       const workout = await Workout.create({
+        expiresAt: (await User.findById(userId))?.expiresAt,
         name: input.name,
         exercises: input.exercises,
         belongsTo: userId,

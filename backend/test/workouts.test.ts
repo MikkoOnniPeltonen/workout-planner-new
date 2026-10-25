@@ -1,13 +1,13 @@
-import type { AuthResponse } from '@workout-planner/shared';
 import request from 'supertest';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { Workout } from '../src/models/Workout.model.ts';
+import type { TestAuth } from './helpers.ts';
 import { app, authed, createUserAndToken, seedExerciseIds } from './helpers.ts';
 
 describe('workouts API', () => {
   let exercises: string[];
-  let alice: AuthResponse;
-  let bob: AuthResponse;
+  let alice: TestAuth;
+  let bob: TestAuth;
 
   beforeEach(async () => {
     exercises = await seedExerciseIds();
@@ -16,7 +16,7 @@ describe('workouts API', () => {
   });
 
   it('creates a workout with populated exercises and keeps the name as typed', async () => {
-    const response = await authed(alice.authToken).post('/workouts', {
+    const response = await authed(alice.sessionCookie).post('/workouts', {
       name: 'Leg Day',
       exercises,
     });
@@ -28,7 +28,7 @@ describe('workouts API', () => {
   });
 
   it('requires authentication on every route', async () => {
-    const { body: workout } = await authed(alice.authToken).post('/workouts', {
+    const { body: workout } = await authed(alice.sessionCookie).post('/workouts', {
       name: 'Leg Day',
       exercises,
     });
@@ -36,20 +36,26 @@ describe('workouts API', () => {
     const responses = await Promise.all([
       request(app).get('/workouts'),
       request(app).get(`/workouts/${workout._id}`),
-      request(app).post('/workouts').send({ name: 'Leg Day', exercises }),
-      request(app).put(`/workouts/${workout._id}`).send({ name: 'Leg Day', exercises }),
-      request(app).delete(`/workouts/${workout._id}`),
+      request(app)
+        .post('/workouts')
+        .set('X-CSRF-Protection', '1')
+        .send({ name: 'Leg Day', exercises }),
+      request(app)
+        .put(`/workouts/${workout._id}`)
+        .set('X-CSRF-Protection', '1')
+        .send({ name: 'Leg Day', exercises }),
+      request(app).delete(`/workouts/${workout._id}`).set('X-CSRF-Protection', '1'),
     ]);
 
     expect(responses.map((response) => response.status)).toEqual([401, 401, 401, 401, 401]);
   });
 
   it("never exposes or changes another user's workout", async () => {
-    const { body: workout } = await authed(alice.authToken).post('/workouts', {
+    const { body: workout } = await authed(alice.sessionCookie).post('/workouts', {
       name: 'Leg Day',
       exercises,
     });
-    const asBob = authed(bob.authToken);
+    const asBob = authed(bob.sessionCookie);
 
     expect((await asBob.get(`/workouts/${workout._id}`)).status).toBe(404);
     expect(
@@ -63,7 +69,7 @@ describe('workouts API', () => {
   });
 
   it('rejects attempts to reassign ownership or inject update operators', async () => {
-    const asAlice = authed(alice.authToken);
+    const asAlice = authed(alice.sessionCookie);
     const { body: workout } = await asAlice.post('/workouts', { name: 'Leg Day', exercises });
 
     const responses = await Promise.all([
@@ -83,13 +89,13 @@ describe('workouts API', () => {
 
   it('allows the same name for different users but not twice for one user', async () => {
     expect(
-      (await authed(alice.authToken).post('/workouts', { name: 'Leg Day', exercises })).status,
+      (await authed(alice.sessionCookie).post('/workouts', { name: 'Leg Day', exercises })).status,
     ).toBe(201);
     expect(
-      (await authed(bob.authToken).post('/workouts', { name: 'Leg Day', exercises })).status,
+      (await authed(bob.sessionCookie).post('/workouts', { name: 'Leg Day', exercises })).status,
     ).toBe(201);
 
-    const duplicate = await authed(alice.authToken).post('/workouts', {
+    const duplicate = await authed(alice.sessionCookie).post('/workouts', {
       name: 'leg day',
       exercises,
     });
@@ -98,7 +104,7 @@ describe('workouts API', () => {
   });
 
   it('validates ids and exercise references', async () => {
-    const asAlice = authed(alice.authToken);
+    const asAlice = authed(alice.sessionCookie);
 
     expect((await asAlice.get('/workouts/not-an-id')).status).toBe(400);
     expect(
@@ -108,7 +114,7 @@ describe('workouts API', () => {
   });
 
   it("updates and deletes the owner's workout", async () => {
-    const asAlice = authed(alice.authToken);
+    const asAlice = authed(alice.sessionCookie);
     const { body: workout } = await asAlice.post('/workouts', { name: 'Leg Day', exercises });
 
     const updated = await asAlice.put(`/workouts/${workout._id}`, {

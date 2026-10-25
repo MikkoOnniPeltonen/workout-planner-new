@@ -8,9 +8,9 @@ describe('signupSchema', () => {
     const result = signupSchema.parse({
       name: '  Alex ',
       email: ' Alex@Example.COM ',
-      password: 'Secret1',
+      password: 'Secret1234567',
     });
-    expect(result).toEqual({ name: 'Alex', email: 'alex@example.com', password: 'Secret1' });
+    expect(result).toEqual({ name: 'Alex', email: 'alex@example.com', password: 'Secret1234567' });
   });
 
   it('reports every unmet password rule', () => {
@@ -18,14 +18,14 @@ describe('signupSchema', () => {
     expect(result.success).toBe(false);
     const messages = result.error?.issues.map((issue) => issue.message);
     expect(messages).toEqual([
-      'Password needs at least 6 characters.',
+      'Password needs at least 12 characters.',
       'Password needs one uppercase letter.',
       'Password needs one number.',
     ]);
   });
 
   it('keeps rule labels in sync with validation', () => {
-    expect(passwordRules.every((rule) => rule.test('Secret1'))).toBe(true);
+    expect(passwordRules.every((rule) => rule.test('Secret1234567'))).toBe(true);
   });
 });
 

@@ -35,6 +35,12 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
     return;
   }
 
-  console.error(error);
+  console.error(
+    JSON.stringify({
+      event: 'application_error',
+      requestId: res.locals.requestId,
+      kind: error instanceof Error ? error.name : 'UnknownError',
+    }),
+  );
   res.status(500).json({ message: 'Internal Server Error' });
 };

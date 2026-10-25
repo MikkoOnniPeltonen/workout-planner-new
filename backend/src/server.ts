@@ -10,15 +10,6 @@ try {
   process.exit(1);
 }
 
-try {
-  // Drops indexes that are no longer declared in the schemas, such as the old
-  // globally-unique workout name, and builds the new ones.
-  await mongoose.syncIndexes();
-} catch (error) {
-  console.error('Could not update the database indexes:', error);
-  process.exit(1);
-}
-
 let shuttingDown = false;
 
 // The driver reconnects by itself; these lines make an outage visible in the logs.
@@ -36,7 +27,9 @@ const server = createApp().listen(env.PORT, (error) => {
 });
 
 function shutdown() {
+  if (shuttingDown) return;
   shuttingDown = true;
+  setTimeout(() => process.exit(1), 10_000).unref();
   server.close(() => {
     mongoose.disconnect().finally(() => process.exit(0));
   });

@@ -6,7 +6,8 @@ import {
   LayoutGrid,
   LogOut,
 } from 'lucide-react';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/auth.context';
 import { cn } from '@/lib/utils';
@@ -37,11 +38,13 @@ function topLinkClass({ isActive }: { isActive: boolean }) {
 
 function Navbar() {
   const { isLoggedIn, logOut } = useAuth();
-  const navigate = useNavigate();
 
-  const handleLogOut = () => {
-    logOut();
-    navigate('/');
+  const handleLogOut = async () => {
+    try {
+      await logOut();
+    } catch {
+      toast.error('Could not log out. Check your connection and try again.');
+    }
   };
 
   return (

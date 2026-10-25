@@ -1,23 +1,29 @@
 import type { ApiErrorBody } from '@workout-planner/shared';
 import axios from 'axios';
-
-const TOKEN_KEY = 'authToken';
-
-export const tokenStorage = {
-  get: () => localStorage.getItem(TOKEN_KEY),
-  set: (token: string) => localStorage.setItem(TOKEN_KEY, token),
-  clear: () => localStorage.removeItem(TOKEN_KEY),
-};
+import { cachedResponse, cacheKey, cacheResponse, currentOwner } from './offline-cache';
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:3000',
+  baseURL: import.meta.env.VITE_BACKEND_URL ?? '/api',
+  withCredentials: true,
+  timeout: 15_000,
+  headers: { 'X-CSRF-Protection': '1' },
 });
 
-api.interceptors.request.use((config) => {
-  const token = tokenStorage.get();
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+declare module 'axios' {
+  interface AxiosRequestConfig {
+    workoutCacheKey?: string;
   }
+}
+api.interceptors.request.use((config) => {
+  if (
+    !['get', 'head', 'options'].includes(config.method ?? 'get') &&
+    !config.url?.startsWith('/auth/') &&
+    currentOwner() &&
+    !config.headers['X-Session-Owner']
+  )
+    config.headers['X-Session-Owner'] = currentOwner();
+  if (config.method === 'get' && !config.url?.startsWith('/auth/'))
+    config.workoutCacheKey = cacheKey(config.url ?? '', config.params);
   return config;
 });
 
@@ -34,13 +40,39 @@ export function setUnauthorizedHandler(handler: () => void): () => void {
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (response.config.method === 'get' && !response.config.url?.startsWith('/auth/'))
+      cacheResponse(
+        response.config.workoutCacheKey ??
+          cacheKey(response.config.url ?? '', response.config.params),
+        response.data,
+      );
+    return response;
+  },
   (error: unknown) => {
-    // Only requests that carried a token can expire; a failed login is an ordinary 401.
+    if (
+      axios.isAxiosError(error) &&
+      !error.response &&
+      error.config?.method === 'get' &&
+      !error.config.url?.startsWith('/auth/')
+    ) {
+      const data = cachedResponse(
+        error.config.workoutCacheKey ?? cacheKey(error.config.url ?? '', error.config.params),
+      );
+      if (data !== null)
+        return {
+          data,
+          status: 200,
+          statusText: 'Offline cache',
+          headers: {},
+          config: error.config,
+        };
+    }
+    // Login failures are shown by the form; other 401s require reauthentication.
     if (
       axios.isAxiosError(error) &&
       error.response?.status === 401 &&
-      error.config?.headers.Authorization
+      !error.config?.url?.startsWith('/auth/')
     ) {
       unauthorizedHandler?.();
     }
